@@ -1,7 +1,11 @@
+#[cfg(not(windows))]
 use crate::*;
-use z3::{ast::Int, *};
+#[cfg(not(windows))]
 use std::fmt::Write;
+#[cfg(not(windows))]
+use z3::{ast::Int, *};
 
+#[cfg(not(windows))]
 pub fn tinv_chk2(m: &MatrixMagma) -> bool {
     let n = m.n;
 
@@ -63,4 +67,12 @@ pub fn tinv_chk2(m: &MatrixMagma) -> bool {
     solver.from_string(s);
 
     matches!(solver.check(), SatResult::Sat)
+}
+
+#[cfg(windows)]
+use crate::*;
+
+#[cfg(windows)]
+pub fn tinv_chk2(_m: &MatrixMagma) -> bool {
+    panic!("tinv_chk2 is unavailable on Windows builds; requires z3 native headers/libraries")
 }

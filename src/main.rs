@@ -93,6 +93,7 @@ pub use uf::*;
 
 fn main() {
     setup_panic_hook();
+    init_parallelism();
     let _timer = Timer::new();
 
     let args: Vec<String> = std::env::args().collect();

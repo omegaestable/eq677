@@ -1,0 +1,21 @@
+% Direct search: E677-magma where E255 fails.
+% E677: x = y * (x * ((y*x) * y))
+% E255: x = ((x*x)*x)*x
+%
+% We want a MODEL of E677 where E255 fails for some element.
+
+set(prolog_style_variables).
+
+formulas(assumptions).
+
+% E677
+X = f(Y, f(X, f(f(Y, X), Y))).
+
+end_of_list.
+
+formulas(goals).
+
+% E255 — if Mace4 finds a model where this FAILS, we have a counterexample
+X = f(f(f(X, X), X), X).
+
+end_of_list.

@@ -1,0 +1,73 @@
+
+============================================================
+[2026-04-11T14:13:26.272889]
+============================== Mace4 =================================
+Mace4 (32) version Dec-2007, Dec 2007.
+Process 30264 was started by nacho on compudos,
+Sat Apr 11 14:13:26 2026
+The command was "/cygdrive/c/Program Files (x86)/Prover9-Mace4/bin-win32/mace4 -n 3 -N 3 -t 90 -f C:\Users\nacho\Documents\GitHub\eq677\atp\anti255-direct.in".
+============================== end of head ===========================
+
+============================== INPUT =================================
+
+% Reading from file C:\Users\nacho\Documents\GitHub\eq677\atp\anti255-direct.in
+
+set(prolog_style_variables).
+
+formulas(assumptions).
+X = f(Y,f(X,f(f(Y,X),Y))).
+end_of_list.
+
+formulas(goals).
+X = f(f(f(X,X),X),X).
+end_of_list.
+    % assign(domain_size, 3) -> assign(start_size, 3).
+    % assign(domain_size, 3) -> assign(end_size, 3).
+
+% From the command line: assign(domain_size, 3).
+
+% From the command line: assign(end_size, 3).
+
+% From the command line: assign(max_seconds, 90).
+
+============================== end of input ==========================
+
+============================== PROCESS NON-CLAUSAL FORMULAS ==========
+
+% Formulas that are not ordinary clauses:
+1 X = f(f(f(X,X),X),X) # label(non_clause) # label(goal).  [goal].
+
+============================== end of process non-clausal formulas ===
+
+============================== CLAUSES FOR SEARCH ====================
+
+formulas(mace4_clauses).
+A = f(B,f(A,f(f(B,A),B))).
+f(f(f(c1,c1),c1),c1) != c1.
+end_of_list.
+
+============================== end of clauses for search =============
+
+% There are no domain elements in the input.
+
+============================== DOMAIN SIZE 3 =========================
+
+============================== STATISTICS ============================
+
+For domain size 3.
+
+Current CPU time: 0.00 seconds (total CPU time: 0.00 seconds).
+Ground clauses: seen=10, kept=10.
+Selections=8, assignments=21, propagations=14, current_models=0.
+Rewrite_terms=110, rewrite_bools=24, indexes=36.
+Rules_from_neg_clauses=10, cross_offs=25.
+
+============================== end of statistics =====================
+
+User_CPU=0.00, System_CPU=0.01, Wall_clock=0.
+
+Exiting with failure.
+
+Process 30264 exit (exhausted) Sat Apr 11 14:13:26 2026
+The process finished Sat Apr 11 14:13:26 2026
+

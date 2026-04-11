@@ -26,8 +26,8 @@ use crate::*;
 // interesting search happens.
 
 pub fn orbit_anti255_run(n: usize) {
-    let ctxt = build_ctxt_orbit_anti255(n);
-    let models = split_models(ctxt);
+    let ctxt = build_orbit_anti255_ctxt(n);
+    let models = split_eq_models(ctxt);
     into_par_for_each(models, |ctxt| {
         mainloop(ctxt);
     });

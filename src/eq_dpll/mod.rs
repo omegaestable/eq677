@@ -62,7 +62,7 @@ enum PropagationTask {
 }
 
 #[derive(Default, Clone)]
-struct Ctxt {
+pub(crate) struct Ctxt {
     trail: Vec<TrailEvent>,
     classes: Vec<Class>, // indexed by TermId
 
@@ -94,6 +94,14 @@ pub fn eq_run(n: usize) {
     into_par_for_each(models, |ctxt| {
         mainloop(ctxt);
     });
+}
+
+pub(crate) fn build_orbit_anti255_ctxt(n: usize) -> Ctxt {
+    build_ctxt_orbit_anti255(n)
+}
+
+pub(crate) fn split_eq_models(ctxt: Ctxt) -> Vec<Ctxt> {
+    split_models(ctxt)
 }
 
 pub(crate) fn mainloop(mut ctxt: Ctxt) {

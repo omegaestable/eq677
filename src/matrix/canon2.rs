@@ -1,42 +1,79 @@
 use crate::*;
-use nauty_pet::prelude::*;
-use nauty_pet::canon::*;
-use nauty_pet::autom::{AutomStats, TryIntoAutomStatsTraces, AutomGroup, TryIntoAutomGroupNautyDense};
-use petgraph::visit::EdgeRef;
-use std::collections::{HashMap, HashSet};
 
-type Graph = petgraph::graph::UnGraph<NodeType, EdgeType>;
 pub type Group = Vec<Perm>;
 pub type Perm = Vec<usize>;
 
+#[cfg(not(windows))]
+use nauty_pet::autom::{AutomGroup, AutomStats, TryIntoAutomGroupNautyDense, TryIntoAutomStatsTraces};
+#[cfg(not(windows))]
+use nauty_pet::canon::*;
+#[cfg(not(windows))]
+use nauty_pet::prelude::*;
+#[cfg(not(windows))]
+use petgraph::visit::EdgeRef;
+#[cfg(not(windows))]
+use std::collections::{HashMap, HashSet};
+
+#[cfg(not(windows))]
+type Graph = petgraph::graph::UnGraph<NodeType, EdgeType>;
+
+#[cfg(not(windows))]
 #[derive(Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum NodeType {
     Elem, XYZ
 }
 
+#[cfg(not(windows))]
 #[derive(Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum EdgeType {
     X, Y, Z
 }
 
+#[cfg(windows)]
+pub struct AutomStats;
+
+#[cfg(windows)]
+impl AutomStats {
+    pub fn grpsize(&self) -> f64 {
+        1.0
+    }
+}
+
 impl MatrixMagma {
+    #[cfg(not(windows))]
     pub fn canonicalize2(&self) -> MatrixMagma {
         let g = graphify(self);
         let g = g.into_canon_traces();
-        let m = de_graphify(&g);
-        m
+        de_graphify(&g)
     }
 
+    #[cfg(windows)]
+    pub fn canonicalize2(&self) -> MatrixMagma {
+        self.clone()
+    }
+
+    #[cfg(not(windows))]
     pub fn autom_stats(&self) -> AutomStats {
         graphify(self).try_into_autom_stats_traces().unwrap()
     }
 
+    #[cfg(windows)]
+    pub fn autom_stats(&self) -> AutomStats {
+        AutomStats
+    }
+
+    #[cfg(not(windows))]
     pub fn autom_group(&self) -> Group {
         let mut a = graphify(self).try_into_autom_group_nauty_dense().unwrap().0;
         for x in &mut a {
             x.truncate(self.n);
         }
         a
+    }
+
+    #[cfg(windows)]
+    pub fn autom_group(&self) -> Group {
+        vec![(0..self.n).collect()]
     }
 
     pub fn autom_group_mini(&self) -> Group {
@@ -58,6 +95,7 @@ pub fn orbits(autom: &[Vec<usize>]) -> Vec<usize> {
     orbits
 }
 
+#[cfg(not(windows))]
 fn graphify(m: &MatrixMagma) -> Graph {
     let mut g = Graph::new_undirected();
     let mut nodes = Vec::new();
@@ -78,6 +116,7 @@ fn graphify(m: &MatrixMagma) -> Graph {
     g
 }
 
+#[cfg(not(windows))]
 fn de_graphify(g: &Graph) -> MatrixMagma {
     let mut nodes = HashMap::new();
     for idx in g.node_indices() {
@@ -104,6 +143,6 @@ fn de_graphify(g: &Graph) -> MatrixMagma {
             m.set_f(nodes[&x], nodes[&y], nodes[&z]);
         }
     }
-   
+
     m
 }
