@@ -35,6 +35,28 @@ PROVER9 = r"C:\Program Files (x86)\Prover9-Mace4\bin-win32\prover9.exe"
 MACE4 = r"C:\Program Files (x86)\Prover9-Mace4\bin-win32\mace4.exe"
 ATP_DIR = os.path.join(ROOT, "atp")
 LOG_DIR = os.path.join(ROOT, "logs")
+WINDOWS_BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+
+
+def creation_flags(background=False):
+    if background and os.name == "nt" and WINDOWS_BELOW_NORMAL:
+        return WINDOWS_BELOW_NORMAL
+    return 0
+
+
+def ensure_t2_defaults(track):
+    track.setdefault("background_mode", True)
+    track.setdefault("depth5_group_limit", 4)
+    track.setdefault("depth5_fp_models", 3)
+    track.setdefault("checkpoint_path", os.path.join(ROOT, "logs", "T2_d5_checkpoint.json"))
+
+
+def parse_t2_checkpoint(track):
+    checkpoint_path = track.get("checkpoint_path")
+    if not checkpoint_path or not os.path.exists(checkpoint_path):
+        return None
+    with open(checkpoint_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_progress():
@@ -122,8 +144,9 @@ def run_T1(prog):
 # ===================================================================
 # T2 — Extract identities at depth 4 and 5
 # ===================================================================
-def run_T2(prog):
+def run_T2(prog, background=False):
     t = prog["TRUE_TRACK"]["T2_identity_extraction"]
+    ensure_t2_defaults(t)
     if t["status"] == "DONE":
         print("T2: Already completed.")
         return
@@ -161,24 +184,51 @@ def run_T2(prog):
     # Depth 5
     if t["result_d5"] is None:
         print("  T2b: depth=5 (may be slow) ...")
+        checkpoint_path = t["checkpoint_path"]
+        cmd = [
+            sys.executable,
+            os.path.join(ROOT, "extract_identities.py"),
+            "5",
+            "--checkpoint", checkpoint_path,
+            "--fp-models", str(t["depth5_fp_models"]),
+        ]
+        if background:
+            cmd.extend(["--group-limit", str(t["depth5_group_limit"])])
         try:
             result = subprocess.run(
-                [sys.executable, os.path.join(ROOT, "extract_identities.py"), "5"],
-                capture_output=True, text=True, timeout=3600, env=env
+                cmd,
+                capture_output=True, text=True,
+                timeout=900 if background else 3600,
+                env=env,
+                creationflags=creation_flags(background)
             )
             output = result.stdout + "\n" + result.stderr
             log_result("T2_d5", output)
 
-            identities = []
-            for line in output.split("\n"):
-                if "=" in line and "depth" in line.lower() and "f(" in line:
-                    identities.append(line.strip())
-            t["result_d5"] = {
-                "identities_count": len(identities),
-                "identities_sample": identities[:20],
-                "exit_code": result.returncode
-            }
-            print(f"  T2b: {len(identities)} identities found at depth 5")
+            checkpoint = parse_t2_checkpoint(t)
+            identities = checkpoint.get("identities", []) if checkpoint else []
+            processed_groups = checkpoint.get("processed_groups", 0) if checkpoint else 0
+            total_groups = checkpoint.get("total_groups", 0) if checkpoint else 0
+
+            if checkpoint and checkpoint.get("completed"):
+                t["result_d5"] = {
+                    "identities_count": len(identities),
+                    "identities_sample": [f"{a}  =  {b}" for (a, b) in identities[:20]],
+                    "exit_code": result.returncode,
+                    "processed_groups": processed_groups,
+                    "total_groups": total_groups,
+                    "checkpoint_path": checkpoint_path,
+                }
+                print(f"  T2b: {len(identities)} identities found at depth 5")
+            else:
+                t["status"] = "PARTIAL"
+                t["notes"] = (
+                    f"Depth-4 completed with {t['result_d4']['identities_count']} identities. "
+                    f"Depth-5 checkpointed at group {processed_groups}/{total_groups}; resume to continue."
+                )
+                save_progress(prog)
+                print(f"  T2b: checkpointed at group {processed_groups}/{total_groups}")
+                return
         except subprocess.TimeoutExpired:
             t["result_d5"] = {"status": "TIMEOUT_1h", "identities_count": 0}
             print("  T2b: TIMEOUT after 1 hour")
@@ -191,7 +241,12 @@ def run_T2(prog):
         all_ids.extend(t["result_d5"].get("identities_sample", []))
     t["identities_found"] = all_ids
     t["status"] = "DONE"
+    t["notes"] = f"Depth-4 and depth-5 completed. Total sampled identities: {len(all_ids)}."
     save_progress(prog)
+
+
+def run_T2_BG(prog):
+    run_T2(prog, background=True)
 
 
 # ===================================================================
@@ -486,7 +541,7 @@ def next_step(prog):
         return "T1"
 
     # T2 in parallel with T5/T6 (identity extraction)
-    if T["T2_identity_extraction"]["status"] in ("NOT_RUN", "NOT_STARTED"):
+    if T["T2_identity_extraction"]["status"] in ("NOT_RUN", "NOT_STARTED", "PARTIAL") and T["T2_identity_extraction"].get("result_d5") is None:
         return "T2"
 
     # T6 (smallest period first — most likely to close fully)
@@ -515,6 +570,7 @@ def next_step(prog):
 RUNNERS = {
     "T1": run_T1,
     "T2": run_T2,
+    "T2-BG": run_T2_BG,
     "T4": run_T4,
     "T5": run_T5,
     "T6": run_T6,

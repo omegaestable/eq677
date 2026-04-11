@@ -22,13 +22,13 @@ We include single-variable identities (x only) since those are the most
 proof-relevant (E255 is single-variable).
 """
 
+import argparse
+import json
 import os
 import sys
-from itertools import product as cartprod
 from analyze_db import load_magma, op
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "db")
-MAX_DEPTH = int(sys.argv[1]) if len(sys.argv) > 1 else 4  # depth 5 is expensive
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +86,29 @@ def term_to_str(t):
     return f"f({term_to_str(t[1])},{term_to_str(t[2])})"
 
 
+def str_to_term(s):
+    s = s.strip()
+    if s in ("x", "y"):
+        return (s,)
+    assert s.startswith("f(") and s.endswith(")"), s
+    inner = s[2:-1]
+    depth = 0
+    split_idx = None
+    for i, ch in enumerate(inner):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            split_idx = i
+            break
+    if split_idx is None:
+        raise ValueError(f"Cannot parse term: {s}")
+    left = inner[:split_idx]
+    right = inner[split_idx + 1:]
+    return ("f", str_to_term(left), str_to_term(right))
+
+
 def eval_term(t, rows, n, x, y):
     if t == ("x",):
         return x
@@ -136,70 +159,45 @@ def load_all_models():
     return models
 
 
-def main():
-    print(f"Generating terms up to depth {MAX_DEPTH}...")
-    # Single-variable identities (most proof-relevant)
-    terms_1v = gen_terms_up_to(MAX_DEPTH, variables=("x",))
-    # Two-variable identities
-    terms_2v = gen_terms_up_to(MAX_DEPTH, variables=("x", "y"))
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("depth", nargs="?", type=int, default=4)
+    parser.add_argument("--checkpoint", type=str)
+    parser.add_argument("--group-limit", type=int, default=0)
+    parser.add_argument("--fp-models", type=int, default=5)
+    return parser.parse_args()
 
-    print(f"  Single-variable terms: {len(terms_1v)}")
-    print(f"  Two-variable terms:    {len(terms_2v)}")
 
-    models = load_all_models()
-    print(f"  Models loaded: {len(models)}")
+def load_checkpoint(path, max_depth):
+    if not path or not os.path.exists(path):
+        return {
+            "max_depth": max_depth,
+            "processed_groups": 0,
+            "total_groups": 0,
+            "candidate_groups": 0,
+            "single_variable_terms": 0,
+            "two_variable_terms": 0,
+            "models_loaded": 0,
+            "identities": [],
+            "completed": False,
+        }
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if data.get("max_depth") != max_depth:
+        raise ValueError(f"Checkpoint depth mismatch: expected {max_depth}, found {data.get('max_depth')}")
+    return data
 
-    # --- Phase 1: single-variable identities (cheaper, more relevant) ---
-    print(f"\n{'='*60}")
-    print(f"SINGLE-VARIABLE IDENTITIES (depth <= {MAX_DEPTH})")
-    print(f"{'='*60}")
 
-    # Canonical form: for each term, compute its evaluation vector on a
-    # small model as a fast fingerprint, then only compare terms with
-    # matching fingerprints across all models.
-    fingerprints_1v = {}  # fingerprint -> list of (term, str)
-    # Use the first few models as fingerprint base
-    fp_models = models[:5]  # small models for fast fingerprinting
-    for t in terms_1v:
-        fp = []
-        for (size, idx, n, rows) in fp_models:
-            for x in range(min(n, 8)):
-                fp.append(eval_term(t, rows, n, x, 0))
-        fp = tuple(fp)
-        if fp not in fingerprints_1v:
-            fingerprints_1v[fp] = []
-        fingerprints_1v[fp].append(t)
+def save_checkpoint(path, data):
+    if not path:
+        return
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
-    # Equivalence classes with >1 member are candidate identities
-    sv_identities = []
-    for fp, group in fingerprints_1v.items():
-        if len(group) < 2:
-            continue
-        # Verify on ALL models
-        canonical = group[0]
-        for other in group[1:]:
-            if check_identity_all_models(canonical, other, models, nvars=1):
-                sv_identities.append((canonical, other))
 
-    # Filter trivial (same term structure)
-    nontrivial = [(t1, t2) for t1, t2 in sv_identities
-                  if term_to_str(t1) != term_to_str(t2)]
-
-    # Deduplicate: keep only one representative per equivalence class
-    classes_1v = {}
-    for t in terms_1v:
-        fp = []
-        for (size, idx, n, rows) in models[:3]:
-            for x in range(min(n, 12)):
-                fp.append(eval_term(t, rows, n, x, 0))
-        fp = tuple(fp)
-        if fp not in classes_1v:
-            classes_1v[fp] = t
-
-    print(f"  Equivalence classes: {len(classes_1v)}")
+def summarize_identities(identity_strings):
+    nontrivial = [(str_to_term(a), str_to_term(b)) for (a, b) in identity_strings]
     print(f"  Non-trivial identities: {len(nontrivial)}")
-
-    # Print representative identities
     if nontrivial:
         print(f"\n  Representative identities (first of each class):")
         seen_pairs = set()
@@ -215,13 +213,109 @@ def main():
                 print("    ... (truncated)")
                 break
 
+
+def run_single_variable_phase(max_depth, models, checkpoint, checkpoint_path, group_limit=0, fp_models_count=5):
+    print(f"\n{'='*60}")
+    print(f"SINGLE-VARIABLE IDENTITIES (depth <= {max_depth})")
+    print(f"{'='*60}")
+
+    terms_1v = gen_terms_up_to(max_depth, variables=("x",))
+    checkpoint["single_variable_terms"] = len(terms_1v)
+    checkpoint["models_loaded"] = len(models)
+
+    fingerprints_1v = {}
+    fp_models = models[:fp_models_count]
+    for t in terms_1v:
+        fp = []
+        for (_, _, n, rows) in fp_models:
+            for x in range(min(n, 8)):
+                fp.append(eval_term(t, rows, n, x, 0))
+        fp = tuple(fp)
+        fingerprints_1v.setdefault(fp, []).append(t)
+
+    candidate_groups = [group for group in fingerprints_1v.values() if len(group) >= 2]
+    checkpoint["candidate_groups"] = len(candidate_groups)
+    checkpoint["total_groups"] = len(candidate_groups)
+
+    processed_before = checkpoint.get("processed_groups", 0)
+    print(f"  Candidate groups: {len(candidate_groups)}")
+    if processed_before:
+        print(f"  Resuming from group {processed_before}/{len(candidate_groups)}")
+
+    processed_now = 0
+    identity_pairs = set(tuple(pair) for pair in checkpoint.get("identities", []))
+    for group_idx in range(processed_before, len(candidate_groups)):
+        group = candidate_groups[group_idx]
+        canonical = group[0]
+        for other in group[1:]:
+            if check_identity_all_models(canonical, other, models, nvars=1):
+                pair = (term_to_str(canonical), term_to_str(other))
+                if pair[0] != pair[1]:
+                    identity_pairs.add(pair)
+
+        checkpoint["processed_groups"] = group_idx + 1
+        checkpoint["identities"] = sorted(identity_pairs)
+        save_checkpoint(checkpoint_path, checkpoint)
+        processed_now += 1
+        if group_limit and processed_now >= group_limit and checkpoint["processed_groups"] < len(candidate_groups):
+            remaining = len(candidate_groups) - checkpoint["processed_groups"]
+            print(f"  Pausing after {processed_now} group(s); {remaining} remain.")
+            summarize_identities(checkpoint["identities"])
+            return False, checkpoint
+
+    checkpoint["completed"] = True
+    save_checkpoint(checkpoint_path, checkpoint)
+
+    classes_1v = {}
+    for t in terms_1v:
+        fp = []
+        for (_, _, n, rows) in models[:3]:
+            for x in range(min(n, 12)):
+                fp.append(eval_term(t, rows, n, x, 0))
+        fp = tuple(fp)
+        if fp not in classes_1v:
+            classes_1v[fp] = t
+
+    print(f"  Equivalence classes: {len(classes_1v)}")
+    summarize_identities(checkpoint["identities"])
+    return True, checkpoint
+
+
+def main():
+    args = parse_args()
+    max_depth = args.depth
+    print(f"Generating terms up to depth {max_depth}...")
+    terms_1v = gen_terms_up_to(max_depth, variables=("x",))
+    terms_2v = gen_terms_up_to(max_depth, variables=("x", "y"))
+
+    print(f"  Single-variable terms: {len(terms_1v)}")
+    print(f"  Two-variable terms:    {len(terms_2v)}")
+
+    models = load_all_models()
+    print(f"  Models loaded: {len(models)}")
+
+    checkpoint = load_checkpoint(args.checkpoint, max_depth)
+    checkpoint["two_variable_terms"] = len(terms_2v)
+
+    completed, checkpoint = run_single_variable_phase(
+        max_depth,
+        models,
+        checkpoint,
+        args.checkpoint,
+        group_limit=args.group_limit,
+        fp_models_count=args.fp_models,
+    )
+    if not completed:
+        return
+
     # --- Phase 2: two-variable identities (more expensive) ---
-    if MAX_DEPTH <= 3:
+    if max_depth <= 3:
         print(f"\n{'='*60}")
-        print(f"TWO-VARIABLE IDENTITIES (depth <= {MAX_DEPTH})")
+        print(f"TWO-VARIABLE IDENTITIES (depth <= {max_depth})")
         print(f"{'='*60}")
 
         fingerprints_2v = {}
+        fp_models = models[:args.fp_models]
         for t in terms_2v:
             fp = []
             for (size, idx, n, rows) in fp_models:
@@ -259,7 +353,7 @@ def main():
                     print("    ... (truncated)")
                     break
     else:
-        print(f"\n  (Skipping two-variable identities at depth {MAX_DEPTH} — too expensive.)")
+        print(f"\n  (Skipping two-variable identities at depth {max_depth} — too expensive.)")
         print(f"  Run with MAX_DEPTH=3 to include two-variable identities.")
 
     # --- Phase 3: E677 ATP cross-reference ---

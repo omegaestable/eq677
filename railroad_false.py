@@ -36,15 +36,15 @@ WINDOWS_BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
 
 def creation_flags(background=False):
-    if background and os.name == "nt" and WINDOWS_BELOW_NORMAL:
-        return WINDOWS_BELOW_NORMAL
+    # FALSE track now runs at normal priority, even in background mode.
     return 0
 
 
 def ensure_f1_defaults(track):
-    track.setdefault("thread_cap", 4)
-    track.setdefault("batch_sizes", 1)
-    track.setdefault("background_mode", True)
+    # thread_cap=0 means uncapped Rayon threads (use full machine parallelism).
+    track.setdefault("thread_cap", 0)
+    track.setdefault("batch_sizes", 20)
+    track.setdefault("background_mode", False)
     track.setdefault("binary_path", os.path.join(ROOT, "target", "release", "eq677.exe"))
 
 
@@ -54,9 +54,13 @@ def build_f1_env(prog, track, background=False):
     llvm_bin = r"C:\Program Files\LLVM\bin"
     cargo_bin = os.path.dirname(prog["ENVIRONMENT"].get("cargo_path", r"C:\Users\nacho\.cargo\bin\cargo.exe"))
     env["PATH"] = f"{llvm_bin};{cargo_bin};" + env.get("PATH", "")
-    thread_cap = int(track.get("thread_cap", 4 if background else 16))
-    env["EQ677_RAYON_THREADS"] = str(thread_cap)
-    env["RAYON_NUM_THREADS"] = str(thread_cap)
+    thread_cap = int(track.get("thread_cap", 0))
+    if thread_cap > 0:
+        env["EQ677_RAYON_THREADS"] = str(thread_cap)
+        env["RAYON_NUM_THREADS"] = str(thread_cap)
+    else:
+        env.pop("EQ677_RAYON_THREADS", None)
+        env.pop("RAYON_NUM_THREADS", None)
     return env
 
 
@@ -399,7 +403,7 @@ def run_F1(prog, background=False):
     save_progress(prog)
 
     start_n = (t.get("max_n_completed") or 1) + 1
-    batch_sizes = int(t.get("batch_sizes", 1 if background else 20))
+    batch_sizes = int(t.get("batch_sizes", 20))
     max_n = min(start_n + batch_sizes - 1, 255)
     env = build_f1_env(prog, t, background=background)
 
@@ -429,7 +433,8 @@ def run_F1(prog, background=False):
                 print(f"exhausted")
                 t["max_n_completed"] = n
                 t["result"] = "NO_COUNTEREXAMPLE_SO_FAR"
-                t["notes"] = f"Completed through n={n} with no counterexample. Thread cap={t['thread_cap']}."
+                cap_label = "unbounded" if int(t.get("thread_cap", 0)) <= 0 else str(t["thread_cap"])
+                t["notes"] = f"Completed through n={n} with no counterexample. Thread cap={cap_label}."
                 save_progress(prog)
 
         except subprocess.TimeoutExpired:
@@ -441,7 +446,8 @@ def run_F1(prog, background=False):
 
     t["status"] = "PARTIAL"
     t["result"] = "NO_COUNTEREXAMPLE"
-    t["notes"] = f"No E677+¬E255 model found for n ≤ {t['max_n_completed']}. Calm mode thread cap={t['thread_cap']}."
+    cap_label = "unbounded" if int(t.get("thread_cap", 0)) <= 0 else str(t["thread_cap"])
+    t["notes"] = f"No E677+¬E255 model found for n ≤ {t['max_n_completed']}. Thread cap={cap_label}."
     save_progress(prog)
     print(f"\n  F1 RESULT: No counterexample for n ≤ {t['max_n_completed']}")
 
