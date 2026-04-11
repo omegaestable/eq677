@@ -12,7 +12,7 @@ use split::*;
 
 mod run;
 use run::*;
-pub use run::{c_run, c_search, c_complete, c_complete_extended};
+pub use run::{c_run, c_search, c_complete, c_complete_extended, c_run_anti255, c_search_anti255};
 
 mod twee;
 pub use twee::*;
@@ -44,6 +44,7 @@ struct Ctxt {
     chosen_per_row: Box<[E]>,
     yxx: Box<[E]>, // y := yxx[x] where y*x = x, E::MAX means undefined.
     forced_automs: Vec<Vec<E>>,
+    anti255_only: bool, // if true, only emit models where E255 fails.
 }
 
 #[derive(Clone)]

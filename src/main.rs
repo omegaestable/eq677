@@ -118,6 +118,23 @@ fn main() {
             eprintln!("[orbit_anti255] n={}", n);
             orbit_anti255_run(n);
         }
+        Some("c-anti255") => {
+            // c_dpll-based search for E677 ∧ ¬E255 models (partial-model composition).
+            // Optional second arg: starting size (default 0).
+            let start: usize = args.get(2)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            c_search_anti255(start);
+        }
+        Some("c-anti255-n") => {
+            // Single size c_dpll anti-255 search.
+            let n: usize = args.get(2)
+                .expect("usage: eq677 c-anti255-n <size>")
+                .parse()
+                .expect("size must be a number");
+            eprintln!("[c_dpll_anti255] n={}", n);
+            c_run_anti255(n);
+        }
         Some("eq-dpll") => {
             let n: usize = args.get(2)
                 .expect("usage: eq677 eq-dpll <size>")

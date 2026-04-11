@@ -1,0 +1,10 @@
+% E677_to_E406197: ATP attack
+set(prolog_style_variables).
+
+formulas(assumptions).
+X = f(Y, f(X, f(f(Y, X), Y))).
+end_of_list.
+
+formulas(goals).
+X = f(f(f(X, f(X,X)), f(X,X)), f(X,X)).
+end_of_list.

@@ -24,6 +24,7 @@ pub fn build_ctxt(n: usize, automs: Vec<Vec<E>>) -> Ctxt {
         chosen_per_row: std::iter::repeat(0).take(n).collect(),
         yxx: std::iter::repeat(E::MAX).take(n).collect(),
         forced_automs: automs,
+        anti255_only: false,
     };
     for x in 0..ctxt.n {
         for y in 0..ctxt.n {

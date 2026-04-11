@@ -1,0 +1,110 @@
+
+============================================================
+[2026-04-11T16:21:53.454844]
+============================== Prover9 ===============================
+Prover9 (32) version Dec-2007, Dec 2007.
+Process 33464 was started by nacho on compudos,
+Sat Apr 11 16:21:53 2026
+The command was "/cygdrive/c/Program Files (x86)/Prover9-Mace4/bin-win32/prover9 -t 300 -f C:\Users\nacho\Documents\GitHub\eq677\atp\intermediate-E677_to_E52930.in".
+============================== end of head ===========================
+
+============================== INPUT =================================
+
+% Reading from file C:\Users\nacho\Documents\GitHub\eq677\atp\intermediate-E677_to_E52930.in
+
+set(prolog_style_variables).
+
+formulas(assumptions).
+X = f(Y,f(X,f(f(Y,X),Y))).
+end_of_list.
+
+formulas(goals).
+f(X,X) = f(f(f(f(X,X),X),X),X).
+end_of_list.
+
+============================== end of input ==========================
+
+% From the command line: assign(max_seconds, 300).
+
+============================== PROCESS NON-CLAUSAL FORMULAS ==========
+
+% Formulas that are not ordinary clauses:
+1 f(X,X) = f(f(f(f(X,X),X),X),X) # label(non_clause) # label(goal).  [goal].
+
+============================== end of process non-clausal formulas ===
+
+============================== PROCESS INITIAL CLAUSES ===============
+
+% Clauses before input processing:
+
+formulas(usable).
+end_of_list.
+
+formulas(sos).
+A = f(B,f(A,f(f(B,A),B))).  [assumption].
+f(f(f(f(c1,c1),c1),c1),c1) != f(c1,c1).  [deny(1)].
+end_of_list.
+
+formulas(demodulators).
+end_of_list.
+
+============================== PREDICATE ELIMINATION =================
+
+No predicates eliminated.
+
+============================== end predicate elimination =============
+
+Auto_denials:  (no changes).
+
+Term ordering decisions:
+Predicate symbol precedence:  predicate_order([ = ]).
+Function symbol precedence:  function_order([ c1, f ]).
+After inverse_order:  (no changes).
+Unfolding symbols: (none).
+
+Auto_inference settings:
+  % set(paramodulation).  % (positive equality literals)
+
+Auto_process settings:  (no changes).
+
+============================== end of process initial clauses ========
+
+============================== CLAUSES FOR SEARCH ====================
+
+% Clauses after input processing:
+
+formulas(usable).
+end_of_list.
+
+formulas(sos).
+3 f(A,f(B,f(f(A,B),A))) = B.  [copy(2),flip(a)].
+4 f(f(f(f(c1,c1),c1),c1),c1) != f(c1,c1).  [deny(1)].
+end_of_list.
+
+formulas(demodulators).
+3 f(A,f(B,f(f(A,B),A))) = B.  [copy(2),flip(a)].
+end_of_list.
+
+============================== end of clauses for search =============
+
+============================== SEARCH ================================
+
+% Starting search at 0.00 seconds.
+
+given #1 (I,wt=11): 3 f(A,f(B,f(f(A,B),A))) = B.  [copy(2),flip(a)].
+
+given #2 (I,wt=13): 4 f(f(f(f(c1,c1),c1),c1),c1) != f(c1,c1).  [deny(1)].
+
+given #3 (A,wt=21): 5 f(A,f(f(B,f(f(A,B),A)),f(B,A))) = f(B,f(f(A,B),A)).  [para(3(a,1),3(a,1,2,2,1))].
+
+given #4 (T,wt=35): 6 f(A,f(f(f(B,f(f(A,B),A)),f(B,A)),f(f(B,f(f(A,B),A)),A))) = f(f(B,f(f(A,B),A)),f(B,A)).  [para(5(a,1),3(a,1,2,2,1))].
+
+given #5 (T,wt=49): 7 f(f(A,f(f(B,A),B)),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A)) = f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))).  [para(3(a,1),5(a,1,2,2))].
+
+given #6 (T,wt=59): 8 f(A,f(f(f(f(B,f(f(A,B),A)),f(B,A)),f(f(B,f(f(A,B),A)),A)),f(f(f(B,f(f(A,B),A)),f(B,A)),A))) = f(f(f(B,f(f(A,B),A)),f(B,A)),f(f(B,f(f(A,B),A)),A)).  [para(5(a,1),5(a,1,2,1,2,1)),rewrite([5(29)])].
+
+given #7 (T,wt=75): 9 f(f(f(A,f(f(B,A),B)),f(A,B)),f(f(B,f(f(f(f(A,f(f(B,A),B)),f(A,B)),B),f(f(A,f(f(B,A),B)),f(A,B)))),f(A,f(f(B,A),B)))) = f(B,f(f(f(f(A,f(f(B,A),B)),f(A,B)),B),f(f(A,f(f(B,A),B)),f(A,B)))).  [para(5(a,1),5(a,1,2,2))].
+
+given #8 (A,wt=79): 10 f(f(A,f(f(B,A),B)),f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B))))) = f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A).  [para(3(a,1),6(a,1,2,1,2)),rewrite([3(41)])].
+
+Demod_limit: f(f(f(f(A,f(f(B,A),B)),f(f(f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B))),f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))))),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A)),f(f(f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))),f(f(f(f(f(A,f(f(B,A),B)),f(f(f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B))),f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))))),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A)),f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B))))),f(f(f(A,f(f(B,A),B)),f(f(f(f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),A),f(f(B,f(f(f(A,f(f(B,A),B)),B),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B)))),f(A,f(f(B,A),B))),f(f(f(B,f(f(f(A,f(f(B,A),B))

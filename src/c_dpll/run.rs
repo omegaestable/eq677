@@ -54,6 +54,23 @@ pub fn c_search() {
     }
 }
 
+pub fn c_run_anti255(n: usize) {
+    let mut models = split_models(build_ctxt(n, Vec::new()));
+    for m in &mut models {
+        m.anti255_only = true;
+    }
+    into_par_for_each(models, |mut ctxt| {
+        prerun(0, &mut ctxt);
+    });
+}
+
+pub fn c_search_anti255(start: usize) {
+    for n in start.. {
+        eprintln!("[c_dpll_anti255] n={}", n);
+        c_run_anti255(n);
+    }
+}
+
 fn inc_counter(ctr: &AtomicUsize) {
     if !USE_COUNTER { return }
 
@@ -151,10 +168,19 @@ fn select_p(ctxt: &Ctxt) -> Option<(E, E)> {
 }
 
 fn submit_model(ctxt: &Ctxt) {
-    present_model(ctxt.n as usize, "c_dpll", |x, y| {
-        let i = idx(x as E, y as E, ctxt.n);
-        ctxt.classes_xy[i].value as usize
-    });
+    if ctxt.anti255_only {
+        let m = ctxt.matrix();
+        if m.is255() { return; }
+        present_model(ctxt.n as usize, "c_dpll_anti255", |x, y| {
+            let i = idx(x as E, y as E, ctxt.n);
+            ctxt.classes_xy[i].value as usize
+        });
+    } else {
+        present_model(ctxt.n as usize, "c_dpll", |x, y| {
+            let i = idx(x as E, y as E, ctxt.n);
+            ctxt.classes_xy[i].value as usize
+        });
+    }
 }
 
 pub fn defresh(e: E, ctxt: &mut Ctxt) {

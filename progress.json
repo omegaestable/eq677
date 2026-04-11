@@ -1,7 +1,7 @@
 {
   "_comment": "Machine-readable progress state for E677 exploration. Agents MUST read this before acting and update it after completing any step.",
-  "last_updated": "2026-04-11 15:37",
-  "last_agent_session": "railroad_false",
+  "last_updated": "2026-04-11 16:21",
+  "last_agent_session": "railroad_true",
   "TRUE_TRACK": {
     "_comment": "Proving E677 \u00e2\u0160\u00a8_fin E255 (d-injectivity).",
     "T1_lemma_verification": {
@@ -111,49 +111,97 @@
       "notes": "Open pairs cluster around indices 3 (c_{d-4}) and 6 (c_{d-1}). Pattern: c_{d-4} is the squaring anchor; c_{d-1} is the orbit predecessor of c_0=x."
     },
     "T4_cascade_d7_augmented": {
-      "status": "NOT_STARTED",
+      "status": "PARTIAL",
       "description": "Re-run 7 open d=7 pairs with additional axioms from T2 (depth-4/5 identities).",
       "depends_on": [
         "T2_identity_extraction",
         "T3_cascade_d7"
       ],
-      "augmented_axioms": [],
-      "results": {},
-      "notes": "Key idea: non-equational identities from finiteness provide extra constraints that close the gap."
+      "augmented_axioms": [
+        "x  =  f(f(f(x,x),x),x)   [depth 3, size 1+7]",
+        "x  =  f(x,f(x,f(f(x,x),x)))   [depth 4, size 1+9]",
+        "x  =  f(f(x,x),f(f(x,f(x,x)),x))   [depth 4, size 1+11]",
+        "f(x,x)  =  f(x,f(f(f(x,x),x),x))   [depth 4, size 3+9]",
+        "f(x,x)  =  f(f(f(f(x,x),x),x),x)   [depth 4, size 3+9]",
+        "x  =  f(f(f(x,x),x),f(f(f(x,x),x),x))   [depth 4, size 1+13]",
+        "x  =  f(f(f(x,x),f(f(x,x),x)),f(x,x))   [depth 4, size 1+13]",
+        "x  =  f(f(f(f(x,x),x),x),f(x,f(f(x,x),x)))   [depth 4, size 1+15]",
+        "f(x,f(x,x))  =  f(f(f(f(x,x),x),x),f(x,x))   [depth 4, size 5+11]",
+        "f(f(x,x),x)  =  f(f(x,x),f(f(f(x,x),x),x))   [depth 4, size 5+11]"
+      ],
+      "results": {
+        "0-3": "OPEN",
+        "1-3": "OPEN",
+        "2-3": "OPEN",
+        "2-4": "OPEN",
+        "2-6": "OPEN",
+        "3-6": "OPEN",
+        "4-6": "OPEN"
+      },
+      "notes": "Results: {'0-3': 'OPEN', '1-3': 'OPEN', '2-3': 'OPEN', '2-4': 'OPEN', '2-6': 'OPEN', '3-6': 'OPEN', '4-6': 'OPEN'}. Still open: ['0-3', '1-3', '2-3', '2-4', '2-6', '3-6', '4-6']"
     },
     "T5_cascade_d6": {
-      "status": "NOT_STARTED",
+      "status": "PARTIAL",
       "description": "Generate and run cascade-gap for d=6: C(6,2)=15 pairs.",
       "command_gen": "python generate_cascade_atp.py 6",
       "command_run": "Get-ChildItem atp\\cascade-d6-*.in | ForEach-Object { & \"C:\\Program Files (x86)\\Prover9-Mace4\\bin-win32\\prover9.exe\" -t 60 -f $_.FullName }",
       "refuted": [],
-      "open": [],
-      "notes": "Smaller period may be fully closable."
+      "open": [
+        "0-1",
+        "0-2",
+        "0-3",
+        "0-4",
+        "0-5",
+        "1-2",
+        "1-3",
+        "1-4",
+        "1-5",
+        "2-3",
+        "2-4",
+        "2-5",
+        "3-4",
+        "3-5",
+        "4-5"
+      ],
+      "notes": "0/15 refuted, 15 open: ['0-1', '0-2', '0-3', '0-4', '0-5', '1-2', '1-3', '1-4', '1-5', '2-3', '2-4', '2-5', '3-4', '3-5', '4-5']"
     },
     "T6_cascade_d5": {
-      "status": "NOT_STARTED",
+      "status": "PARTIAL",
       "description": "Generate and run cascade-gap for d=5: C(5,2)=10 pairs.",
       "command_gen": "python generate_cascade_atp.py 5",
-      "notes": "d=5 is the minimum for L2 anchor. If all 10 close, d=5 d-injectivity is proved."
+      "notes": "0/10 refuted, 10 open: ['0-1', '0-2', '0-3', '0-4', '1-2', '1-3', '1-4', '2-3', '2-4', '3-4']",
+      "refuted": [],
+      "open": [
+        "0-1",
+        "0-2",
+        "0-3",
+        "0-4",
+        "1-2",
+        "1-3",
+        "1-4",
+        "2-3",
+        "2-4",
+        "3-4"
+      ]
     },
     "T7_intermediate_atp": {
-      "status": "NOT_STARTED",
+      "status": "DONE",
       "description": "Attack intermediate equation chain: E677 => E52930, E677 => E406197, E677+E406197 => E255.",
       "subtasks": {
         "E677_to_E52930": {
-          "status": "NOT_STARTED",
-          "result": null
+          "status": "DONE",
+          "result": "OPEN (no proof in 300s)"
         },
         "E677_to_E406197": {
-          "status": "NOT_STARTED",
-          "result": null
+          "status": "DONE",
+          "result": "OPEN (no proof in 300s)"
         },
         "E677_E406197_to_E255": {
-          "status": "NOT_STARTED",
-          "result": null
+          "status": "DONE",
+          "result": "OPEN (no proof in 300s)"
         }
       },
-      "notes": "These are direct Prover9 attacks. If any succeeds, it's a genuine theorem."
+      "notes": "No intermediate implications proved by ATP alone."
     },
     "T8_cascade_general": {
       "status": "NOT_STARTED",
@@ -169,12 +217,12 @@
   "FALSE_TRACK": {
     "_comment": "Searching for a finite E677-magma that violates E255 (d-injectivity fails).",
     "F1_dpll_search": {
-      "status": "RUNNING",
+      "status": "PARTIAL",
       "description": "Run orbit_anti255_dpll (Rust) for small n: cargo run --release -- anti255 2",
       "blocker": null,
       "max_n_completed": 18,
-      "result": "NO_COUNTEREXAMPLE_SO_FAR",
-      "notes": "Completed through n=18 with no counterexample. Thread cap=unbounded.",
+      "result": "NO_COUNTEREXAMPLE",
+      "notes": "No E677+\u00acE255 model found for n \u2264 18. Thread cap=unbounded.",
       "thread_cap": 0,
       "batch_sizes": 20,
       "background_mode": false,
@@ -199,19 +247,27 @@
         "9/0": {
           "K_max": 3,
           "result": "UNSAT"
+        },
+        "29/0": {
+          "K_max": 4,
+          "coloring": "2-class (diagonal=0, off-diagonal=1)",
+          "result": "UNSAT"
         }
       },
       "pending_bases": [
-        "29/0 (3 colorings)",
         "11/0",
         "13/0"
       ],
-      "notes": "Completed bases: ['7/0', '9/0']. Pending: ['29/0 (3 colorings)', '11/0', '13/0']. Manual config needed for new bases."
+      "notes": "Completed bases: ['7/0', '9/0', '29/0']. Pending: ['11/0', '13/0']. Manual config needed for new bases."
     },
     "F4_construction_audit": {
       "status": "DONE",
       "description": "Run construction audit (A1-A6) from proof_candidates.py to identify live attack vectors.",
       "command": "python proof_candidates.py  (includes verdict_construction_audit())",
+      "A2_c_dpll_anti255": {
+        "status": "DONE",
+        "notes": "anti255_only field + c_run_anti255 + c_search_anti255 added to src/c_dpll/. Commands: 'c-anti255 [start]' and 'c-anti255-n <n>'. Binary rebuilt 2026-04-11."
+      },
       "result": "CONSTRUCTION FAMILY AUDIT  (A1\u00e2\u20ac\u201cA6 attack directions)\n================================================================================\n\n  [~] A1: Piecewise linear extension (vanishing c/d)\n      Code:   color-extensions.py (affine only), color-extensions-nonlinear.py (full table)\n      Status: PARTIAL\n      Gap:    Vanishing c_{x,y}/d_{x,y} mode not implemented. Only full-table or affine.\n      Next:   Add vanishing-coefficient mode to color-extensions.py for targeted piecewise search.\n\n  [~] A2: Partial model composition (core + add-ons)\n      Code:   src/c_dpll/ (c_complete, c_complete_extended)\n      Status: PARTIAL\n      Gap:    c_complete exists but NOT wired to anti-255 constraints.\n      Next:   Add anti255 filter to c_dpll submit_model (like eq_dpll has).\n\n  [\u00e2\u0153\u201c] A3: Rudi's 2-coloring + non-affine fibers\n      Code:   color-extensions-nonlinear.py (anti255 mode)\n      Status: LIVE\n      Gap:    Only bases 7/0 and 9/0 implemented. 29/0 (3 colorings) not added.\n      Next:   Add magmadef for 29/0 with its three 2-colorings.\n\n  [\u00e2\u0153\u2014] A4: Block design mixed constructions (GDD)\n      Code:   NONE\n      Status: CONCEPTUAL\n      Gap:    No implementation. Would need GDD construction + mixed fiber ops.\n      Next:   Low priority \u00e2\u20ac\u201d Bruno's closure argument suggests 255 stays in blocks.\n\n  [\u00c2\u00b7] A5: Non-abelian group constructions (exponent 5)\n      Code:   linear.sage (abelian groups only)\n      Status: MINIMAL\n      Gap:    Only abelian exhaustive search. No non-abelian or exponent-5 specific code.\n      Next:   Implement f(x)\u00c2\u00b7y^b\u00c2\u00b7g(x) Ansatz over (Z/5Z)^k groups.\n\n  [\u00e2\u0153\u201c] A6: Free algebra quotient (Zoltan's approach)\n      Code:   src/one_orbit2.rs (term rewriting branch-and-bound)\n      Status: LIVE\n      Gap:    Runs but does not check finiteness of computed quotient.\n      Next:   Add quotient size detection + E255 check on completion.\n\n  Priority ranking for counterexample work:\n    1. A3 (LIVE) \u00e2\u20ac\u201d add 29/0 base, run anti255 mode\n    2. A1 (PARTIAL) \u00e2\u20ac\u201d vanishing-coefficient piecewise extension\n    3. A2 (PARTIAL) \u00e2\u20ac\u201d wire anti255 into c_dpll\n    4. A6 (LIVE) \u00e2\u20ac\u201d add finiteness/E255 detection to one_orbit2\n    5. A5 (MINIMAL) \u00e2\u20ac\u201d non-abelian group Ansatz (new code needed)\n    6. A4 (CONCEPTUAL) \u00e2\u20ac\u201d block design (deprioritized)\n================================================================================",
       "notes": "A1-A6 audit: 4 LIVE, 4 PARTIAL, 2 CONCEPTUAL attack vectors."
     },

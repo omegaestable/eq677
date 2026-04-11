@@ -39,14 +39,13 @@ WINDOWS_BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
 
 def creation_flags(background=False):
-    if background and os.name == "nt" and WINDOWS_BELOW_NORMAL:
-        return WINDOWS_BELOW_NORMAL
+    # TRUE track now runs at normal priority, even in background mode.
     return 0
 
 
 def ensure_t2_defaults(track):
-    track.setdefault("background_mode", True)
-    track.setdefault("depth5_group_limit", 4)
+    track.setdefault("background_mode", False)
+    track.setdefault("depth5_group_limit", 0)  # 0 = uncapped
     track.setdefault("depth5_fp_models", 3)
     track.setdefault("checkpoint_path", os.path.join(ROOT, "logs", "T2_d5_checkpoint.json"))
 
