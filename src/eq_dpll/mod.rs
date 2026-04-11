@@ -80,6 +80,13 @@ struct Ctxt {
     depth: usize, // The number of DecisionPoints on the current trail.
 
     propagate_queue: Vec<PropagationTask>,
+
+    // --- orbit-anti255 extension ---
+    // If true: only emit models where E255 fails (d-sequence has a collision).
+    anti255_only: bool,
+    // If true: score cells (x,0) and (0,x) highly so the orbit of element 0
+    // is wired up before unrelated cells, enabling early collision detection.
+    orbit_bias: bool,
 }
 
 pub fn eq_run(n: usize) {
@@ -89,7 +96,7 @@ pub fn eq_run(n: usize) {
     });
 }
 
-fn mainloop(mut ctxt: Ctxt) {
+pub(crate) fn mainloop(mut ctxt: Ctxt) {
     loop {
         match ctxt.mode {
             Mode::Forward => forward_step(&mut ctxt),
@@ -131,7 +138,14 @@ fn forward_step(ctxt: &mut Ctxt) {
 }
 
 fn submit_model(ctxt: &Ctxt) {
-    present_model(ctxt.n, "eq_dpll", |x, y| ctxt.table[idx((x, y), ctxt.n)]);
+    if ctxt.anti255_only {
+        // Build a full MatrixMagma and check that E255 fails at some element.
+        let m = MatrixMagma::by_fn(ctxt.n, |x, y| ctxt.table[idx((x, y), ctxt.n)]);
+        if m.is255() { return; }
+        present_model(ctxt.n, "orbit_anti255_dpll", |x, y| ctxt.table[idx((x, y), ctxt.n)]);
+    } else {
+        present_model(ctxt.n, "eq_dpll", |x, y| ctxt.table[idx((x, y), ctxt.n)]);
+    }
 }
 
 fn backtrack_step(ctxt: &mut Ctxt) {
@@ -158,7 +172,16 @@ fn best_score(ctxt: &Ctxt) -> Option<PosId> {
         for y in 0..ctxt.n {
             let i = idx((x, y), ctxt.n);
             if ctxt.table[i] != ElemId::MAX { continue; }
-            let score = ctxt.pos_terms[i].len();
+            let mut score = ctxt.pos_terms[i].len();
+            // Orbit bias: prioritize cells that define the d-sequence of element 0.
+            // d_k = f(c_k, 0), so (anything, 0) cells determine all d_k values.
+            // f(0, anything) cells define the c-sequence steps c_{k+1} = f(0, c_k).
+            // f(x, x) cells determine the squaring map, fixing orbit period structure.
+            if ctxt.orbit_bias {
+                if y == 0 { score += 1000; }        // d-sequence cells: highest priority
+                else if x == 0 { score += 800; }    // c-sequence cells
+                else if x == y { score += 400; }    // squaring map
+            }
             let cond = match best {
                 None => true,
                 Some((_, score2)) => score > score2,

@@ -7,6 +7,23 @@ fn test_db_conj() {
     }
 }
 
+#[test]
+fn test_db_orbit_analysis() {
+    for (name, m) in db() {
+        println!("=== Model {}/{} (n={}) ===", name.0, name.1, m.n);
+        orbit_report(&m);
+    }
+}
+
+#[test]
+fn test_db_component_analysis() {
+    for (name, m) in db() {
+        if m.n > 50 { continue } // skip large models for perf
+        println!("=== Model {}/{} (n={}) ===", name.0, name.1, m.n);
+        component_report(&m);
+    }
+}
+
 pub fn conj(m: &MatrixMagma) {
     assert!(m.is677());
     assert!(m.is255());
@@ -16,6 +33,8 @@ pub fn conj(m: &MatrixMagma) {
     conj_bijective_or_constant(m);
     conj_singleton_cycle(m);
     conj_2_orbit(m);
+    conj_orbit_injective(m);
+    conj_orbit_squaring(m);
 
     // false_conj_unique_cycle_size(m);
     // false_conj_cycle_size(m);
@@ -328,6 +347,161 @@ fn right_cycle(m: &MatrixMagma, x: usize) -> usize {
     c
 }
 
+// McKenna orbit analysis:
+// For element x, define:
+//   c_0 = x, c_{k+1} = x ◇ c_k  (i.e., c_k = L_x^k(x))
+//   d_k = c_k ◇ x
+// The orbit period d is the smallest positive k with c_k = x.
+// E255 is equivalent to: for all x, the map k ↦ d_k is injective on Z/dZ.
+// Known identity from E677: c_{d-4} ◇ c_{d-4} = c_{d-5} (for d >= 5).
+
+/// Returns the orbit sequence [c_0, c_1, ..., c_{d-1}] where c_k = L_x^k(x).
+pub fn orbit_c_seq(m: &MatrixMagma, x: usize) -> Vec<usize> {
+    let mut seq = vec![x];
+    let mut cur = x;
+    loop {
+        cur = m.f(x, cur);
+        if cur == x { break }
+        seq.push(cur);
+    }
+    seq
+}
+
+/// Returns the d-sequence [d_0, d_1, ..., d_{d-1}] where d_k = c_k ◇ x.
+pub fn orbit_d_seq(m: &MatrixMagma, x: usize) -> Vec<usize> {
+    orbit_c_seq(m, x).iter().map(|&ck| m.f(ck, x)).collect()
+}
+
+/// Check if the d-sequence is injective (equivalent to E255).
+fn orbit_d_injective(m: &MatrixMagma, x: usize) -> bool {
+    let d_seq = orbit_d_seq(m, x);
+    let mut seen = vec![false; m.n];
+    for &dk in &d_seq {
+        if seen[dk] { return false }
+        seen[dk] = true;
+    }
+    true
+}
+
+/// Verify the squaring identity: c_{d-4} ◇ c_{d-4} = c_{d-5} for d >= 5.
+fn orbit_squaring_identity(m: &MatrixMagma, x: usize) -> bool {
+    let c_seq = orbit_c_seq(m, x);
+    let d = c_seq.len();
+    if d < 5 { return true }
+    let c_dm4 = c_seq[d - 4];
+    let c_dm5 = c_seq[d - 5];
+    m.f(c_dm4, c_dm4) == c_dm5
+}
+
+/// Assert orbit d-injectivity for all elements (conjecture equivalent to E255).
+fn conj_orbit_injective(m: &MatrixMagma) {
+    for x in 0..m.n {
+        assert!(orbit_d_injective(m, x),
+            "orbit d-sequence not injective for x={} in model of size {}", x, m.n);
+    }
+}
+
+/// Assert squaring identity for all elements.
+fn conj_orbit_squaring(m: &MatrixMagma) {
+    for x in 0..m.n {
+        assert!(orbit_squaring_identity(m, x),
+            "squaring identity failed for x={} in model of size {}", x, m.n);
+    }
+}
+
+/// Print detailed orbit analysis report for a magma.
+pub fn orbit_report(m: &MatrixMagma) {
+    let mut orbit_periods: Vec<usize> = Vec::new();
+    let mut all_d_inj = true;
+    let mut all_sq_ok = true;
+
+    for x in 0..m.n {
+        let c_seq = orbit_c_seq(m, x);
+        let d = c_seq.len();
+        let d_inj = orbit_d_injective(m, x);
+        let sq_ok = orbit_squaring_identity(m, x);
+
+        orbit_periods.push(d);
+        all_d_inj &= d_inj;
+        all_sq_ok &= sq_ok;
+
+        if !d_inj || !sq_ok || m.n <= 31 {
+            let d_seq = orbit_d_seq(m, x);
+            println!("  x={}: period={}, d_inj={}, sq_ok={}", x, d, d_inj, sq_ok);
+            if d <= 40 {
+                println!("    c: {:?}", c_seq);
+                println!("    d: {:?}", d_seq);
+            }
+        }
+    }
+
+    orbit_periods.sort();
+    orbit_periods.dedup();
+    println!("  orbit_periods={:?} d_inj={} sq_ok={}", orbit_periods, all_d_inj, all_sq_ok);
+}
+
+// Component structure analysis:
+// Analyze L_x permutation cycle types, squaring map, and interaction structure.
+
+/// Returns the cycle type (sorted cycle lengths) of the permutation L_x.
+fn lx_cycle_type(m: &MatrixMagma, x: usize) -> Vec<usize> {
+    let cycles = bij_to_cycles(m.n, |z| m.f(x, z));
+    let mut lengths: Vec<usize> = cycles.iter().map(|c| c.len()).collect();
+    lengths.sort();
+    lengths
+}
+
+/// Returns the cycle structure of the squaring map S: x → x◇x.
+fn squaring_map_cycles(m: &MatrixMagma) -> Vec<Vec<usize>> {
+    bij_to_cycles(m.n, |x| m.f(x, x))
+}
+
+/// Print component structure report for a magma.
+pub fn component_report(m: &MatrixMagma) {
+    println!("Component structure for size {} model:", m.n);
+
+    // 1. Classify L_x by cycle type
+    let mut type_groups: std::collections::BTreeMap<Vec<usize>, Vec<usize>> = std::collections::BTreeMap::new();
+    for x in 0..m.n {
+        let ct = lx_cycle_type(m, x);
+        type_groups.entry(ct).or_default().push(x);
+    }
+    println!("  L_x cycle type classes:");
+    for (ct, elems) in &type_groups {
+        println!("    {:?} => {} elements: {:?}", ct, elems.len(),
+            if elems.len() <= 20 { format!("{:?}", elems) } else { format!("[{}, ..., {}]", elems[0], elems[elems.len()-1]) });
+    }
+
+    // 2. Squaring map S(x) = x◦x
+    if m.is_diag_bijective() {
+        let sq_cycles = squaring_map_cycles(m);
+        let mut sq_lengths: Vec<usize> = sq_cycles.iter().map(|c| c.len()).collect();
+        sq_lengths.sort();
+        println!("  squaring map (bijective): cycle_type={:?}", sq_lengths);
+        let fixed: Vec<usize> = (0..m.n).filter(|&x| m.f(x, x) == x).collect();
+        if !fixed.is_empty() {
+            println!("  idempotent elements: {:?}", fixed);
+        }
+    } else {
+        let image_size = {
+            let mut img = vec![false; m.n];
+            for x in 0..m.n { img[m.f(x, x)] = true; }
+            img.iter().filter(|&&b| b).count()
+        };
+        println!("  squaring map: non-bijective, image_size={}", image_size);
+    }
+
+    // 3. Check pairwise commutativity of L_x
+    let mut commuting_pairs = 0usize;
+    let total_pairs = m.n * (m.n - 1) / 2;
+    for x in 0..m.n {
+        for y in (x+1)..m.n {
+            let all_commute = (0..m.n).all(|z| m.f(x, m.f(y, z)) == m.f(y, m.f(x, z)));
+            if all_commute { commuting_pairs += 1; }
+        }
+    }
+    println!("  L_x commutativity: {}/{} pairs commute", commuting_pairs, total_pairs);
+}
 
 impl MatrixMagma {
     pub fn is_left_cancellative(&self) -> bool {

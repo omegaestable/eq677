@@ -79,6 +79,9 @@ pub use check::*;
 mod prop_combo;
 pub use prop_combo::*;
 
+mod orbit_dpll;
+pub use orbit_dpll::*;
+
 mod enumerate;
 pub use enumerate::*;
 

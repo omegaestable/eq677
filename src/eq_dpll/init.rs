@@ -1,12 +1,23 @@
 use crate::eq_dpll::*;
 
-pub fn build_ctxt(n: usize) -> Ctxt {
+pub(crate) fn build_ctxt(n: usize) -> Ctxt {
     let mut ctxt = Ctxt::default();
     ctxt.n = n;
     ctxt.fresh = vec![true; n];
     ctxt.table = vec![ElemId::MAX; n*n];
     ctxt.pos_terms = vec![Vec::new(); n*n];
     add_constraints(&mut ctxt);
+    ctxt
+}
+
+/// Build a context configured for orbit-biased anti-255 search.
+/// Sets orbit_bias=true so cells (x,0) and (0,x) are prioritised by the
+/// scorer, wiring up the L_0 orbit and d-sequence before unrelated cells.
+/// Sets anti255_only=true so only models where E255 fails are emitted.
+pub(crate) fn build_ctxt_orbit_anti255(n: usize) -> Ctxt {
+    let mut ctxt = build_ctxt(n);
+    ctxt.anti255_only = true;
+    ctxt.orbit_bias = true;
     ctxt
 }
 

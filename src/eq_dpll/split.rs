@@ -1,6 +1,6 @@
 use crate::eq_dpll::*;
 
-pub fn split_models(ctxt: Ctxt) -> Vec<Ctxt> {
+pub(crate) fn split_models(ctxt: Ctxt) -> Vec<Ctxt> {
     if ctxt.n <= 1 { return vec![ctxt] }
 
     let mut out = Vec::new();
