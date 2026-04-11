@@ -95,5 +95,37 @@ fn main() {
     setup_panic_hook();
     let _timer = Timer::new();
 
-    one_orbit2_run();
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(|s| s.as_str()) {
+        Some("anti255") => {
+            // Orbit-biased DPLL search for E677 ∧ ¬E255 models.
+            // Optional second arg: starting size (default 0).
+            let start: usize = args.get(2)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            for n in start.. {
+                eprintln!("[orbit_anti255] n={}", n);
+                orbit_anti255_run(n);
+            }
+        }
+        Some("anti255-n") => {
+            // Single size anti-255 search.
+            let n: usize = args.get(2)
+                .expect("usage: eq677 anti255-n <size>")
+                .parse()
+                .expect("size must be a number");
+            eprintln!("[orbit_anti255] n={}", n);
+            orbit_anti255_run(n);
+        }
+        Some("eq-dpll") => {
+            let n: usize = args.get(2)
+                .expect("usage: eq677 eq-dpll <size>")
+                .parse()
+                .expect("size must be a number");
+            eq_run(n);
+        }
+        _ => {
+            one_orbit2_run();
+        }
+    }
 }

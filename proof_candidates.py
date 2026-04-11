@@ -314,7 +314,9 @@ def run_all():
         print("     + L2b gives a contradiction in first-order logic.")
 
     verdict_proof_candidates(l1_fails, l2_fails, l3_fails)
+    verdict_intermediate_equations(models)
     verdict_search_families()
+    verdict_construction_audit()
 
 
 # ===========================================================================
@@ -381,6 +383,119 @@ def verdict_proof_candidates(l1_fails, l2_fails, l3_fails):
     print("=" * W)
 
 
+# ===========================================================================
+# Intermediate equations — stepping stones between E677 and E255
+# ===========================================================================
+#
+# E255:    x = ((x ◇ x) ◇ x) ◇ x          i.e., x = f(f(f(x,x),x),x)
+# E406197: x = ((x ◇ (x ◇ x)) ◇ (x ◇ x)) ◇ (x ◇ x)
+#          i.e., x = f(f(f(x, f(x,x)), f(x,x)), f(x,x))
+# E52930:  x ◇ x = (((x ◇ x) ◇ x) ◇ x) ◇ x
+#          i.e., f(x,x) = f(f(f(f(x,x),x),x),x)
+#
+# Implication chain (if all hold): E677 => E406197 => E255 (conjectured)
+# E52930 is implied by E255 but may be provable directly from E677.
+# These intermediate targets may be easier to establish with ATP.
+
+def check_E255(n, rows):
+    """x = f(f(f(x,x),x),x) for all x."""
+    for x in range(n):
+        xx = op(rows, x, x)
+        xxx = op(rows, xx, x)
+        xxxx = op(rows, xxx, x)
+        if x != xxxx:
+            return False, x
+    return True, None
+
+
+def check_E406197(n, rows):
+    """x = f(f(f(x, f(x,x)), f(x,x)), f(x,x)) for all x."""
+    for x in range(n):
+        xx = op(rows, x, x)                  # x ◇ x
+        x_xx = op(rows, x, xx)               # x ◇ (x ◇ x)
+        t1 = op(rows, x_xx, xx)              # (x ◇ (x ◇ x)) ◇ (x ◇ x)
+        t2 = op(rows, t1, xx)                # ((x ◇ (x ◇ x)) ◇ (x ◇ x)) ◇ (x ◇ x)
+        if x != t2:
+            return False, x
+    return True, None
+
+
+def check_E52930(n, rows):
+    """f(x,x) = f(f(f(f(x,x),x),x),x) for all x."""
+    for x in range(n):
+        xx = op(rows, x, x)                  # x ◇ x
+        t1 = op(rows, xx, x)                 # (x ◇ x) ◇ x
+        t2 = op(rows, t1, x)                 # ((x ◇ x) ◇ x) ◇ x
+        t3 = op(rows, t2, x)                 # (((x ◇ x) ◇ x) ◇ x) ◇ x
+        if xx != t3:
+            return False, x
+    return True, None
+
+
+def check_idempotent(n, rows):
+    """x = x ◇ x for all x (E255 implies this when combined with left-cancel)."""
+    for x in range(n):
+        if op(rows, x, x) != x:
+            return False, x
+    return True, None
+
+
+def verdict_intermediate_equations(models):
+    """Test intermediate equations between E677 and E255 across all DB models."""
+    W = 70
+    print()
+    print("=" * W)
+    print("INTERMEDIATE EQUATION VERDICTS")
+    print("=" * W)
+
+    checks = [
+        ("E255",    check_E255),
+        ("E406197", check_E406197),
+        ("E52930",  check_E52930),
+        ("Idempot", check_idempotent),
+    ]
+
+    results = {}
+    for name, fn in checks:
+        fails = []
+        for (size, idx, n, rows) in models:
+            ok, witness = fn(n, rows)
+            if not ok:
+                fails.append((f"{size}/{idx}", witness))
+        results[name] = fails
+
+    fmt = "  {:<10} {:<12} {}"
+    print(fmt.format("Equation", "Holds?", "Detail"))
+    print("  " + "-" * (W - 2))
+    for name, fn in checks:
+        fails = results[name]
+        if not fails:
+            print(fmt.format(name, f"YES (0/{len(models)})", "Uniform across all DB models"))
+        else:
+            print(fmt.format(name, f"NO ({len(fails)}/{len(models)})",
+                             f"First fail: {fails[0]}"))
+
+    print()
+    # Implication analysis
+    e255_ok = len(results["E255"]) == 0
+    e406197_ok = len(results["E406197"]) == 0
+    e52930_ok = len(results["E52930"]) == 0
+    idemp_ok = len(results["Idempot"]) == 0
+
+    if e255_ok and e406197_ok and e52930_ok:
+        print("  All intermediate equations hold on every DB model.")
+        print("  Implication chain E677 => E406197 => E255 is empirically supported.")
+        print()
+        print("  ATP targets (ordered by expected difficulty):")
+        print("    1. E677 => E52930 (weakest — squaring equivariance at depth 5)")
+        print("    2. E677 => E406197 (intermediate — squaring self-reference)")
+        print("    3. E677 + E406197 => E255 (may be tractable if E406197 provides leverage)")
+    if not idemp_ok:
+        n_non_idemp = len(results["Idempot"])
+        print(f"  {n_non_idemp}/{len(models)} models are non-idempotent (expected for non-RC models).")
+    print("=" * W)
+
+
 def verdict_search_families():
     """
     For each search family, force a binary verdict on three questions:
@@ -441,6 +556,88 @@ def verdict_search_families():
     print("      'verified up to size N', sharpening the ATP attack window.")
     print("  (c) If all found E677 models in this family are E255: structural regime")
     print("      collapses and should be promoted to a new conjectural lemma (L4).")
+    print("=" * W)
+
+
+def verdict_construction_audit():
+    """
+    Audit which counterexample attack directions (A1-A6 from the plan) have
+    live, runnable code versus being conceptual only.
+    """
+    W = 80
+    print()
+    print("=" * W)
+    print("CONSTRUCTION FAMILY AUDIT  (A1–A6 attack directions)")
+    print("=" * W)
+
+    families = [
+        {
+            "id": "A1",
+            "name": "Piecewise linear extension (vanishing c/d)",
+            "code": "color-extensions.py (affine only), color-extensions-nonlinear.py (full table)",
+            "status": "PARTIAL",
+            "gap": "Vanishing c_{x,y}/d_{x,y} mode not implemented. Only full-table or affine.",
+            "next": "Add vanishing-coefficient mode to color-extensions.py for targeted piecewise search.",
+        },
+        {
+            "id": "A2",
+            "name": "Partial model composition (core + add-ons)",
+            "code": "src/c_dpll/ (c_complete, c_complete_extended)",
+            "status": "PARTIAL",
+            "gap": "c_complete exists but NOT wired to anti-255 constraints.",
+            "next": "Add anti255 filter to c_dpll submit_model (like eq_dpll has).",
+        },
+        {
+            "id": "A3",
+            "name": "Rudi's 2-coloring + non-affine fibers",
+            "code": "color-extensions-nonlinear.py (anti255 mode)",
+            "status": "LIVE",
+            "gap": "Only bases 7/0 and 9/0 implemented. 29/0 (3 colorings) not added.",
+            "next": "Add magmadef for 29/0 with its three 2-colorings.",
+        },
+        {
+            "id": "A4",
+            "name": "Block design mixed constructions (GDD)",
+            "code": "NONE",
+            "status": "CONCEPTUAL",
+            "gap": "No implementation. Would need GDD construction + mixed fiber ops.",
+            "next": "Low priority — Bruno's closure argument suggests 255 stays in blocks.",
+        },
+        {
+            "id": "A5",
+            "name": "Non-abelian group constructions (exponent 5)",
+            "code": "linear.sage (abelian groups only)",
+            "status": "MINIMAL",
+            "gap": "Only abelian exhaustive search. No non-abelian or exponent-5 specific code.",
+            "next": "Implement f(x)·y^b·g(x) Ansatz over (Z/5Z)^k groups.",
+        },
+        {
+            "id": "A6",
+            "name": "Free algebra quotient (Zoltan's approach)",
+            "code": "src/one_orbit2.rs (term rewriting branch-and-bound)",
+            "status": "LIVE",
+            "gap": "Runs but does not check finiteness of computed quotient.",
+            "next": "Add quotient size detection + E255 check on completion.",
+        },
+    ]
+
+    for fam in families:
+        color = {"LIVE": "✓", "PARTIAL": "~", "MINIMAL": "·", "CONCEPTUAL": "✗"}
+        marker = color.get(fam["status"], "?")
+        print(f"\n  [{marker}] {fam['id']}: {fam['name']}")
+        print(f"      Code:   {fam['code']}")
+        print(f"      Status: {fam['status']}")
+        print(f"      Gap:    {fam['gap']}")
+        print(f"      Next:   {fam['next']}")
+
+    print()
+    print("  Priority ranking for counterexample work:")
+    print("    1. A3 (LIVE) — add 29/0 base, run anti255 mode")
+    print("    2. A1 (PARTIAL) — vanishing-coefficient piecewise extension")
+    print("    3. A2 (PARTIAL) — wire anti255 into c_dpll")
+    print("    4. A6 (LIVE) — add finiteness/E255 detection to one_orbit2")
+    print("    5. A5 (MINIMAL) — non-abelian group Ansatz (new code needed)")
+    print("    6. A4 (CONCEPTUAL) — block design (deprioritized)")
     print("=" * W)
 
 
