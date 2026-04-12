@@ -92,11 +92,40 @@ mod uf;
 pub use uf::*;
 
 fn main() {
+    // Detect --calm and --sleep-ms before rayon initializes (Once barrier in init_parallelism).
+    // --calm caps threads to 25% of logical cores for thermal relief.
+    // --sleep-ms <n> injects a sleep between work units to reduce duty cycle.
+    {
+        let raw: Vec<String> = std::env::args().collect();
+        if raw.iter().any(|a| a == "--calm") {
+            let total = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+            let n = (total / 4).max(1);
+            unsafe { std::env::set_var("EQ677_RAYON_THREADS", n.to_string()); }
+            eprintln!("[calm] thread cap={n} (25% of {total} cores)");
+        }
+        if let Some(pos) = raw.iter().position(|a| a == "--sleep-ms") {
+            if let Some(ms) = raw.get(pos + 1).and_then(|s| s.parse::<u64>().ok()) {
+                crate::SLEEP_MS.store(ms, std::sync::atomic::Ordering::Relaxed);
+                eprintln!("[calm] sleep-ms={ms} per work unit");
+            }
+        }
+    }
     setup_panic_hook();
     init_parallelism();
     let _timer = Timer::new();
 
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = {
+        let raw: Vec<String> = std::env::args().collect();
+        let mut out = vec![];
+        let mut i = 0;
+        while i < raw.len() {
+            if raw[i] == "--calm" { i += 1; continue; }
+            if raw[i] == "--sleep-ms" { i += 2; continue; }
+            out.push(raw[i].clone());
+            i += 1;
+        }
+        out
+    };
     match args.get(1).map(|s| s.as_str()) {
         Some("anti255") => {
             // Orbit-biased DPLL search for E677 ∧ ¬E255 models.

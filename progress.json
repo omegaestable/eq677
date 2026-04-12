@@ -226,6 +226,7 @@
       "thread_cap": 0,
       "batch_sizes": 20,
       "background_mode": false,
+      "thermal_sweet_spot": "$env:EQ677_RAYON_THREADS=4; .\\target\\release\\eq677.exe anti255 19  (no --sleep-ms needed, 4 threads is the thermal sweet spot on this 32-core machine with side-fans-only cooling)",
       "binary_path": "C:\\Users\\nacho\\Documents\\GitHub\\eq677\\target\\release\\eq677.exe"
     },
     "F2_mace4_direct": {
@@ -252,13 +253,20 @@
           "K_max": 4,
           "coloring": "2-class (diagonal=0, off-diagonal=1)",
           "result": "UNSAT"
+        },
+        "11/0": {
+          "K_max": 4,
+          "coloring": "2-class (diagonal=0, off-diagonal=1)",
+          "result": "UNSAT"
+        },
+        "13/0": {
+          "K_max": 4,
+          "coloring": "2-class (diagonal=0, off-diagonal=1)",
+          "result": "UNSAT"
         }
       },
-      "pending_bases": [
-        "11/0",
-        "13/0"
-      ],
-      "notes": "Completed bases: ['7/0', '9/0', '29/0']. Pending: ['11/0', '13/0']. Manual config needed for new bases."
+      "pending_bases": [],
+      "notes": "All 5 bases (7/0, 9/0, 29/0, 11/0, 13/0) exhausted at K<=4 with 2-class coloring. All UNSAT."
     },
     "F4_construction_audit": {
       "status": "DONE",

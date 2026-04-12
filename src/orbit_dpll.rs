@@ -28,8 +28,11 @@ use crate::*;
 pub fn orbit_anti255_run(n: usize) {
     let ctxt = build_orbit_anti255_ctxt(n);
     let models = split_eq_models(ctxt);
+    // maybe_sleep() here throttles between the top-level split branches only,
+    // not recursively inside the tree. This is the right granularity for --sleep-ms.
     into_par_for_each(models, |ctxt| {
         mainloop(ctxt);
+        maybe_sleep();
     });
 }
 

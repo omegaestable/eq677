@@ -136,6 +136,8 @@ fn forward_step(ctxt: &mut Ctxt) {
         return;
     }
 
+    throttle_point();
+
     let Some((pos, options)) = next_options(ctxt) else {
         submit_model(ctxt);
         ctxt.mode = Mode::Backtracking;
