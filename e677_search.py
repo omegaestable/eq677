@@ -214,15 +214,30 @@ class BuildOptions:
     timeout_ms: int = 0
     seed: Optional[int] = None
     verbose: bool = True
+    # New, default-on optimizations:
+    use_uf: bool = True                # uninterpreted Function instead of Array
+    inverse_channel: bool = True       # add Tinv with channeling equations
+    explicit_inverse: bool = True      # Tinv(y,x) = x o ((y o x) o y)
+    transformed_identity: bool = True  # z = (y o z) o ((y o (y o z)) o y)
+    cycle_ground_facts: bool = True    # bake in d>=3 cycle consequences
+    distinct_rows_under_channeling: bool = False  # redundant when channeling on
+    bv: bool = False                   # use BitVec encoding instead of Int
+    tactic: str = ""                   # optional Z3 tactic, e.g. "qffd", "smt", "psmt"
 
 
 def build_solver(opts: BuildOptions):
     """
     Build and return (solver, T_at, Cell, z3_module).
 
-    Cell is a single Z3 array indexed by row*n + column.
-    T_at(row, col) returns Select(Cell, row*n + col), where row and col may be
-    Python ints or Z3 integer expressions.
+    By default the table is encoded as an uninterpreted function
+        T : Int x Int -> Int
+    which is significantly faster for Z3 than the Array(IntSort,IntSort)
+    flattening that this script used previously.  An auxiliary function Tinv
+    represents the row inverses with full channeling, plus the closed-form
+    identity Tinv(y,x) = x o ((y o x) o y) which is a direct rewrite of E677.
+
+    Cell is kept in the return tuple only for backward compatibility and is
+    None in the default UF mode.
     """
     try:
         import z3  # type: ignore
@@ -237,34 +252,127 @@ def build_solver(opts: BuildOptions):
 
     z3.set_param("parallel.enable", True)
 
-    Cell = z3.Array("T", z3.IntSort(), z3.IntSort())
-    solver = z3.Solver()
+    # Construct the solver. If a tactic is requested, derive the solver from
+    # a tactic chain so Z3 picks a different decision procedure (e.g. qffd
+    # for finite-domain bit-vector problems).
+    if opts.tactic:
+        try:
+            tac = z3.Then("simplify", "propagate-values", opts.tactic)
+            solver = tac.solver()
+        except z3.Z3Exception as exc:
+            die(f"unknown Z3 tactic {opts.tactic!r}: {exc}")
+    else:
+        solver = z3.Solver()
 
     if opts.timeout_ms > 0:
-        solver.set(timeout=opts.timeout_ms)
-    if opts.seed is not None:
-        solver.set(random_seed=opts.seed)
+        try:
+            solver.set(timeout=opts.timeout_ms)
+        except Exception:
+            pass
+    # Tactic-derived solvers may not expose 'random_seed'; only set it for
+    # the default Solver().
+    if opts.seed is not None and not opts.tactic:
+        try:
+            solver.set(random_seed=opts.seed)
+        except Exception:
+            pass
+
+    # Choose the value sort.  Bit-vectors of width k = ceil(log2 max(n,2)) are
+    # often dramatically faster than unbounded Int for finite-domain problems
+    # because Z3 bit-blasts to SAT.
+    if opts.bv:
+        k = max(1, (max(n, 2) - 1).bit_length())
+        ValSort = z3.BitVecSort(k)
+
+        def vconst(v: int):
+            return z3.BitVecVal(v, k)
+
+        def in_range(expr):
+            # Unsigned less-than against n.
+            return z3.ULT(expr, vconst(n))
+
+        def eq_const(expr, c: int):
+            return expr == vconst(c)
+    else:
+        ValSort = z3.IntSort()
+
+        def vconst(v: int):
+            return z3.IntVal(v)
+
+        def in_range(expr):
+            return z3.And(expr >= 0, expr < n)
+
+        def eq_const(expr, c: int):
+            return expr == vconst(c)
 
     def zint(v):
-        return z3.IntVal(v) if isinstance(v, int) else v
+        # Used for indexing the UF/Array.  In BV mode keep indices as bit-vectors
+        # of the same width to share sorts everywhere.
+        if opts.bv:
+            return v if z3.is_expr(v) else vconst(int(v))
+        return v if z3.is_expr(v) else z3.IntVal(int(v))
 
-    def T_at(row, col):
-        row_e = zint(row)
-        col_e = zint(col)
-        return z3.Select(Cell, row_e * n + col_e)
+    if opts.use_uf:
+        Cell = None
+        IdxSort = ValSort
+        T_func = z3.Function("T", IdxSort, IdxSort, ValSort)
+        Tinv_func = z3.Function("Tinv", IdxSort, IdxSort, ValSort)
 
-    # All fixed cells are values in Omega.
+        def T_at(row, col):
+            return T_func(zint(row), zint(col))
+
+        def Tinv_at(row, col):
+            return Tinv_func(zint(row), zint(col))
+    else:
+        if opts.bv:
+            # Wider index BV so row*n + col can't overflow.
+            kk = max(1, (n * n - 1).bit_length())
+            FlatSort = z3.BitVecSort(kk)
+            Cell = z3.Array("T", FlatSort, ValSort)
+
+            def T_at(row, col):
+                r = row if z3.is_expr(row) else z3.BitVecVal(int(row), kk)
+                if z3.is_expr(r) and r.size() != kk:
+                    r = z3.ZeroExt(kk - r.size(), r)
+                c = col if z3.is_expr(col) else z3.BitVecVal(int(col), kk)
+                if z3.is_expr(c) and c.size() != kk:
+                    c = z3.ZeroExt(kk - c.size(), c)
+                return z3.Select(Cell, r * z3.BitVecVal(n, kk) + c)
+        else:
+            Cell = z3.Array("T", z3.IntSort(), z3.IntSort())
+
+            def T_at(row, col):
+                return z3.Select(Cell, zint(row) * n + zint(col))
+
+        Tinv_at = None  # not available without UF
+
+    # All cells are values in Omega = {0, ..., n-1}.
     for y in range(n):
         for x in range(n):
             val = T_at(y, x)
-            solver.add(val >= 0, val < n)
+            solver.add(in_range(val))
+            if opts.inverse_channel and Tinv_at is not None:
+                ival = Tinv_at(y, x)
+                solver.add(in_range(ival))
 
-    # Each L_y is a permutation.
-    for y in range(n):
-        solver.add(z3.Distinct([T_at(y, x) for x in range(n)]))
+    if opts.inverse_channel and Tinv_at is not None:
+        # Inverse channeling: each row L_y is a permutation, witnessed by L_y^{-1}.
+        # This replaces and strengthens the per-row Distinct constraint.
+        for y in range(n):
+            for x in range(n):
+                solver.add(Tinv_at(y, T_at(y, x)) == x)
+                solver.add(T_at(y, Tinv_at(y, x)) == x)
+    else:
+        # Fall back to per-row Distinct.
+        for y in range(n):
+            solver.add(z3.Distinct([T_at(y, x) for x in range(n)]))
+
+    # Optional Distinct on top of channeling. Redundant but sometimes a useful cut.
+    if opts.distinct_rows_under_channeling and opts.inverse_channel and Tinv_at is not None:
+        for y in range(n):
+            solver.add(z3.Distinct([T_at(y, x) for x in range(n)]))
 
     # Optional but implied by E677: x -> L_x is injective.
-    # This is useful as a search cut.
     if opts.distinct_rows:
         for i in range(n):
             for j in range(i + 1, n):
@@ -274,7 +382,7 @@ def build_solver(opts: BuildOptions):
     for cyc in opts.fixed_l0_cycles:
         for i, src in enumerate(cyc):
             dst = cyc[(i + 1) % len(cyc)]
-            solver.add(T_at(0, src) == dst)
+            solver.add(eq_const(T_at(0, src), dst))
 
     # E677:
     #     L_y( L_x( L_{L_y(x)}(y) ) ) = x
@@ -283,26 +391,45 @@ def build_solver(opts: BuildOptions):
             u = T_at(y, x)
             v = T_at(u, y)
             w = T_at(x, v)
-            solver.add(T_at(y, w) == x)
+            solver.add(eq_const(T_at(y, w), x))
+
+    # Transformed identity (consequence of E677, see HINT_PACK):
+    #     z = (y o z) o ((y o (y o z)) o y)
+    if opts.transformed_identity:
+        for y in range(n):
+            for zz in range(n):
+                yz = T_at(y, zz)
+                yyz = T_at(y, yz)
+                yyzy = T_at(yyz, y)
+                solver.add(eq_const(T_at(yz, yyzy), zz))
+
+    # Closed-form inverse from E677:
+    #     L_y^{-1}(x) = x o ((y o x) o y)
+    if opts.explicit_inverse and Tinv_at is not None:
+        for y in range(n):
+            for x in range(n):
+                yx = T_at(y, x)
+                yxy = T_at(yx, y)
+                solver.add(Tinv_at(y, x) == T_at(x, yxy))
 
     # E255 failure at the witness:
     #     L_{L_{L_a(a)}(a)}(a) != a
     b = T_at(a, a)
     c = T_at(b, a)
-    solver.add(T_at(c, a) != a)
+    solver.add(T_at(c, a) != vconst(a))
 
     if opts.require_no_fixer_of_witness:
-        # Under E677 this is equivalent to E255 failure at a:
-        # no row L_y fixes the witness-column entry a.
+        # Under E677 + column-fixer uniqueness this is equivalent to E255
+        # failure at a: no row L_y fixes the witness-column entry a.
         for y in range(n):
-            solver.add(T_at(y, a) != a)
+            solver.add(T_at(y, a) != vconst(a))
 
     if opts.structural_cuts:
         # Column-fixer uniqueness:
         # for each column x, at most one row y may satisfy L_y(x)=x.
         # This follows from E677, but the Boolean AtMost form propagates well.
         for x in range(n):
-            solver.add(z3.AtMost(*[T_at(y, x) == x for y in range(n)], 1))
+            solver.add(z3.AtMost(*[eq_const(T_at(y, x), x) for y in range(n)], 1))
 
         # No proper 2-cycle or proper 3-cycle through x under L_x.
         # Fixed points L_x(x)=x are allowed.
@@ -310,8 +437,23 @@ def build_solver(opts: BuildOptions):
             x1 = T_at(x, x)
             x2 = T_at(x, x1)
             x3 = T_at(x, x2)
-            solver.add(z3.Implies(x1 != x, x2 != x))
-            solver.add(z3.Implies(z3.And(x1 != x, x2 != x), x3 != x))
+            solver.add(z3.Implies(x1 != vconst(x), x2 != vconst(x)))
+            solver.add(z3.Implies(z3.And(x1 != vconst(x), x2 != vconst(x)), x3 != vconst(x)))
+
+    # Cycle-derived ground facts.
+    # If a fixed L_0 cycle of length d >= 3 starts at the witness a, then E677
+    # together with d_1 = c_{d-2} (HINT_PACK item 4) forces:
+    #     L_{c_1}(a)       = c_{d-2}     (from d_1 = c_1 o a and L_a^2(d_1) = a)
+    #     L_{c_{d-1}}(c_1) = c_{d-2}     (from c_{d-2} = c_{d-1} o d_0, d_0 = c_1)
+    if opts.cycle_ground_facts:
+        for cyc in opts.fixed_l0_cycles:
+            if len(cyc) >= 3 and cyc[0] == a:
+                d = len(cyc)
+                c1 = cyc[1]
+                cdm1 = cyc[d - 1]
+                cdm2 = cyc[d - 2]
+                solver.add(eq_const(T_at(c1, a), cdm2))
+                solver.add(eq_const(T_at(cdm1, c1), cdm2))
 
     return solver, T_at, Cell, z3
 
@@ -322,7 +464,11 @@ def extract_table(model, T_at, n: int) -> List[List[int]]:
         row = []
         for x in range(n):
             v = model.evaluate(T_at(y, x), model_completion=True)
-            row.append(int(v.as_long()))
+            # Works for both IntNumRef and BitVecNumRef.
+            try:
+                row.append(int(v.as_long()))
+            except AttributeError:
+                row.append(int(v.as_string()))
         table.append(row)
     return table
 
@@ -399,6 +545,13 @@ def run_search(args: argparse.Namespace) -> int:
         timeout_ms=max(0, int(args.timeout * 1000)),
         seed=args.seed,
         verbose=args.verbose,
+        use_uf=not args.no_uf,
+        inverse_channel=not args.no_inverse_channel,
+        explicit_inverse=not args.no_explicit_inverse,
+        transformed_identity=not args.no_transformed_identity,
+        cycle_ground_facts=not args.no_cycle_ground_facts,
+        bv=args.bv,
+        tactic=args.tactic or "",
     )
 
     solver, T_at, _Cell, z3 = build_solver(opts)
@@ -416,6 +569,13 @@ def run_search(args: argparse.Namespace) -> int:
         print(f"  structural cuts={opts.structural_cuts}")
         print(f"  require no fixer of witness={opts.require_no_fixer_of_witness}")
         print(f"  distinct rows cut={opts.distinct_rows}")
+        print(f"  uf encoding={opts.use_uf}")
+        print(f"  inverse channeling={opts.inverse_channel}")
+        print(f"  explicit inverse={opts.explicit_inverse}")
+        print(f"  transformed identity={opts.transformed_identity}")
+        print(f"  cycle ground facts={opts.cycle_ground_facts}")
+        print(f"  bv encoding={opts.bv}")
+        print(f"  tactic={opts.tactic or 'default'}")
         print(f"  timeout={args.timeout} seconds" if args.timeout else "  timeout=none")
         if args.seed is not None:
             print(f"  random seed={args.seed}")
@@ -451,6 +611,11 @@ def run_search(args: argparse.Namespace) -> int:
                     "structural_cuts": opts.structural_cuts,
                     "require_no_fixer_of_witness": opts.require_no_fixer_of_witness,
                     "distinct_rows": opts.distinct_rows,
+                    "use_uf": opts.use_uf,
+                    "inverse_channel": opts.inverse_channel,
+                    "explicit_inverse": opts.explicit_inverse,
+                    "transformed_identity": opts.transformed_identity,
+                    "cycle_ground_facts": opts.cycle_ground_facts,
                     "seed": args.seed,
                 },
             )
@@ -533,6 +698,41 @@ Examples:
         help="disable the derived row-injectivity cut",
     )
     p.add_argument(
+        "--no-uf",
+        action="store_true",
+        help="use the legacy Array(IntSort,IntSort) encoding instead of UF Function",
+    )
+    p.add_argument(
+        "--no-inverse-channel",
+        action="store_true",
+        help="disable Tinv channeling (per-row Distinct is used as fallback)",
+    )
+    p.add_argument(
+        "--no-explicit-inverse",
+        action="store_true",
+        help="disable Tinv(y,x) = x o ((y o x) o y) closed-form rewrite",
+    )
+    p.add_argument(
+        "--no-transformed-identity",
+        action="store_true",
+        help="disable the redundant transformed-identity axiom",
+    )
+    p.add_argument(
+        "--no-cycle-ground-facts",
+        action="store_true",
+        help="disable cycle-derived ground unit literals (L_{c_1}(a), L_{c_{d-1}}(c_1))",
+    )
+    p.add_argument(
+        "--bv",
+        action="store_true",
+        help="use bit-vector value sort (Z3 bit-blasts to SAT; often much faster)",
+    )
+    p.add_argument(
+        "--tactic",
+        default="",
+        help="optional Z3 tactic to wrap the solver, e.g. 'qffd', 'smt', 'psmt', 'qfbv'",
+    )
+    p.add_argument(
         "--require-no-fixer-of-witness",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -547,6 +747,62 @@ Examples:
     )
 
     return p
+
+
+def solve_once(opts_dict: dict) -> dict:
+    """
+    Picklable, side-effect-light entry point used by the portfolio driver.
+
+    Input is a plain dict matching the BuildOptions fields, plus optional keys:
+      - "label": a string identifying the worker (returned in the result)
+
+    Output is a plain dict:
+      {
+        "label": <str>,
+        "status": "sat" | "unsat" | "unknown",
+        "elapsed_seconds": <float>,
+        "table": <list[list[int]]> or None,    # only on sat
+        "verified": <bool>,                    # only on sat
+        "reason": <str>,                       # only on unknown
+        "n": <int>,
+        "witness": <int>,
+      }
+    """
+    label = str(opts_dict.pop("label", ""))
+    # Only keep keys that BuildOptions actually accepts.
+    allowed = {f.name for f in BuildOptions.__dataclass_fields__.values()}
+    clean = {k: v for k, v in opts_dict.items() if k in allowed}
+    opts = BuildOptions(**clean)
+
+    solver, T_at, _Cell, z3 = build_solver(opts)
+
+    start = time.time()
+    result = solver.check()
+    elapsed = time.time() - start
+
+    out = {
+        "label": label,
+        "elapsed_seconds": elapsed,
+        "n": opts.n,
+        "witness": opts.witness,
+        "table": None,
+        "verified": False,
+    }
+    if result == z3.sat:
+        model = solver.model()
+        table = extract_table(model, T_at, opts.n)
+        out["status"] = "sat"
+        out["table"] = table
+        out["verified"] = verify_table(table, witness=opts.witness, verbose=False)
+    elif result == z3.unsat:
+        out["status"] = "unsat"
+    else:
+        out["status"] = "unknown"
+        try:
+            out["reason"] = solver.reason_unknown()
+        except Exception:
+            out["reason"] = "unknown"
+    return out
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
