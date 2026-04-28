@@ -1,6 +1,6 @@
 {
-  "_comment": "Machine-readable progress state for E677 exploration. Agents MUST read this before acting and update it after completing any step.",
-  "last_updated": "2026-04-11 16:21",
+  "_comment": "Machine-readable progress state for historical E677 search/ATP work. This file does not settle theorem status by itself. Current validated theorem status is OPEN, and finite_e677_implies_e255_proof.md is an archived failed route. Read SOLVER_PROMPT.md before acting.",
+  "last_updated": "2026-04-20 17:10",
   "last_agent_session": "railroad_true",
   "TRUE_TRACK": {
     "_comment": "Proving E677 \u00e2\u0160\u00a8_fin E255 (d-injectivity).",

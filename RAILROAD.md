@@ -1,16 +1,22 @@
-# E677 Exploration Railroad — Agent Instructions
+# E677 Exploration Railroad — Historical Search Tracks
 ## READ THIS FIRST
 
 This workspace investigates the open problem: **Does E677 finitely imply E255?**
+
+- Current validated theorem status: **OPEN**.
+- `finite_e677_implies_e255_proof.md` is an archived failed route, not a proof.
+- For the current math-first solving guidance, read `SOLVER_PROMPT.md` before using this railroad.
+- Treat the TRUE/FALSE tracks below as historical search/ATP tracks, not as the default recommended next action.
 
 - **E677**: `x = y ◇ (x ◇ ((y ◇ x) ◇ y))`
 - **E255**: `x = ((x ◇ x) ◇ x) ◇ x`
 
 ## Before You Do Anything
 
-1. **Read `progress.json`** — it tracks every completed step, every result, every open question.
-2. **Do NOT repeat work** already marked DONE in progress.json.
-3. **Log your results** back to progress.json and to `logs/<step>.log`.
+1. **Read `SOLVER_PROMPT.md`** — it is the current theorem-status and strategy source of truth.
+2. **Read `progress.json`** — it tracks historical completed steps, results, and open questions.
+3. **Do NOT repeat work** already marked DONE in progress.json.
+4. **Log your results** back to progress.json and to `logs/<step>.log`.
 
 ## Two Tracks
 
@@ -29,7 +35,7 @@ Proves E677 ⊨_fin E255 via cascade-gap refutation + identity extraction + ATP.
 | T8 | General-d analysis | Blocked on T3+T5+T6 |
 
 ### FALSE Track (Counterexample)
-**Focus area as of 2026-04-11.** Searches for a finite E677-magma violating E255.
+Historical search track. Searches for a finite E677-magma violating E255.
 
 | Step | What | Status |
 |------|------|--------|
@@ -41,7 +47,9 @@ Proves E677 ⊨_fin E255 via cascade-gap refutation + identity extraction + ATP.
 | F6 | Install Rust | DONE — cargo at `C:\Users\nacho\.cargo\bin\cargo.exe` |
 | **A2** | **c_dpll anti255 (NEW)** | **READY — never run. Command: `.\target\release\eq677.exe c-anti255 0`** |
 
-## FALSE Track: Concrete Next Actions (priority order)
+## FALSE Track: Historical Search Actions
+
+These are still available if you have a genuinely new structural reason to use search, but they are not the default next move.
 
 ### 1. Run c_dpll anti255 (A2) — new search family, never run
 This uses the c_dpll partial-model completion engine (structurally different from orbit DPLL).

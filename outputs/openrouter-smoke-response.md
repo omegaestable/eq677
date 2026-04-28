@@ -1,0 +1,1 @@
+OpenRouter DeepSeek path works.

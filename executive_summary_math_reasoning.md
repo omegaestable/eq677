@@ -1,221 +1,98 @@
 # Executive Summary for Next Agent
 
-## Mission profile
+## Current Status
 
-This is a **maximize-math-reasoning** problem.
+The theorem `finite E677 => E255` remains open from the repo's validated perspective.
 
-Hard constraints for the next pass:
+Two things are now known to be false and should not be reused.
 
-- **Ban numerical / finite-model / exhaustive search.** Do not test finite structures, scan multiplication tables, or use SAT/SMT/model-finding to hunt examples or counterexamples.
-- **Ban web search and external references.** Work only from the axiom and elementary algebraic reasoning.
-- **Allow only light sandboxing.** Symbolic scratchwork is acceptable only for algebraic bookkeeping or verifying local rewrites already derived on paper. No experimental search over structures, terms, periods, or cases.
+1. The quotient family
+
+   `d_k\x = c_{k-2} ◦ c_{k-1}`
+
+   is false in tracked finite E677 models.
+2. The full shift law
+
+   `p ◦ d_k = d_{k+1}`
+
+   is also false in tracked finite E677 models.
+
+As a consequence, any route trying to prove universal period collapse such as `d | 3` or `d = 1` is dead.
+
+The file `finite_e677_implies_e255_proof.md` is now an archived failed attempt, not a proof note.
+
+## Mission Profile
+
+This is still a **maximize-math-reasoning** problem.
+
+- Do not default to brute-force search, SAT/SMT, ATP reruns, or random model construction.
+- Use computation only as a sanity check for a structurally motivated claim.
 - Prefer direct equational manipulation, cancellation, orbit arguments, and finite-set permutation arguments.
 
----
+## Problem Data
 
-## Problem data
+We have a finite magma `(M, ◦)` satisfying
 
-We have a finite magma \((M,\circ)\) satisfying
+`E677: x = y ◦ (x ◦ ((y ◦ x) ◦ y))`
 
-\[
-(\star)\qquad x 
-= y\circ\bigl(x\circ((y\circ x)\circ y)\bigr)
-\qquad(\forall x,y\in M).
-\]
+for all `x, y`.
 
-Fix \(x\in M\). Define
+Fix `x` and define
 
-\[
-c_0=x,\qquad c_{k+1}=x\circ c_k.
-\]
+- `c_0 = x`
+- `c_{k+1} = x ◦ c_k`
 
-Since \(M\) is finite, the sequence is eventually periodic; let \(d\) be the **minimal period**, so
+Let `d` be the minimal period, so `c_d = x` and `c_0, ..., c_{d-1}` are pairwise distinct. Define
 
-\[
-c_d=x,
-\]
+- `d_k = c_k ◦ x`
 
-and \(c_0,c_1,\dots,c_{d-1}\) are pairwise distinct. Define
+The theorem target is still `E255: x = ((x ◦ x) ◦ x) ◦ x`.
 
-\[
-d_k=c_k\circ x
-\qquad (k\in \mathbb Z/d\mathbb Z).
-\]
+## Trusted Facts
 
-Target parts still open from the previous pass:
+1. Left translations are bijections, so left cancellation is available.
+2. The recurrence
 
-- (c) for \(d\ge 5\), prove
-  1. \(c_{d-4}\circ c_{d-4}=c_{d-5}\),
-  2. \(c_{d-2}\circ x=x\).
-- (d) prove \(k\mapsto d_k\) is injective on \(\mathbb Z/d\mathbb Z\).
+   `c_{k-1} = c_k ◦ d_{k+1}`
 
-Parts (a) and (b) are complete.
+   is valid.
+3. The transformed identity
 
----
+   `z = (y ◦ z) ◦ ((y ◦ (y ◦ z)) ◦ y)`
 
-## Fully established facts
+   is valid.
+4. `d_1 = c_{d-2}`.
+5. If `d_j = x`, then `j = d - 2 (mod d)`.
+6. The two open part (c) statements are equivalent:
 
-### A. Left-cancellativity
+   - `c_{d-4} ◦ c_{d-4} = c_{d-5}`
+   - `c_{d-2} ◦ x = x`
 
-For fixed \(a\in M\), applying \((\star)\) with \(y=a\) gives
+7. The quotient formula
 
-\[
-z = a\circ\bigl(z\circ((a\circ z)\circ a)\bigr)
-\qquad(\forall z\in M).
-\]
+   `a\b = b ◦ ((a ◦ b) ◦ a)`
 
-So the left translation \(L_a:t\mapsto a\circ t\) is surjective. Since \(M\) is finite, \(L_a\) is bijective. Therefore:
+   is valid.
+8. The safe local quotient identities include
 
-\[
-a\circ b=a\circ c \implies b=c.
-\]
+   - `x\c_k = c_{k-1}`
+   - `c_k\c_{k-1} = d_{k+1}`
+   - `p\d_1 = c_1`
+   - `p ◦ c_1 = d_1`
 
-This is valid for every \(a\in M\).
+## Best Live Targets
 
----
+1. Primary local target: prove `c_{d-2} ◦ x = x`.
+2. Secondary structural target: prove injectivity of `k -> d_k` on `Z/dZ`.
+3. Exploratory target: find a weaker transport law sufficient to force one index with `d_j = x`, but do not assume a global shift law.
 
-### B. Basic recurrence
+## Strategic Guidance
 
-Apply \((\star)\) with \(y=x\) and with the first variable equal to \(c_k\):
-
-\[
-c_k=x\circ\bigl(c_k\circ((x\circ c_k)\circ x)\bigr).
-\]
-
-Since \(x\circ c_k=c_{k+1}\) and \((x\circ c_k)\circ x=d_{k+1}\), this becomes
-
-\[
-c_k=x\circ(c_k\circ d_{k+1}).
-\]
-
-But also \(c_k=x\circ c_{k-1}\). Left-cancel \(x\):
-
-\[
-\boxed{c_{k-1}=c_k\circ d_{k+1}}\qquad(\forall k\in \mathbb Z/d\mathbb Z).
-\]
-
-This is the key recurrence from part (b).
-
----
-
-### C. Useful transformed identity
-
-Substitute \(x=y\circ z\) into \((\star)\):
-
-\[
-y\circ z = y\circ\Bigl((y\circ z)\circ((y\circ(y\circ z))\circ y)\Bigr).
-\]
-
-Left-cancel \(y\):
-
-\[
-\boxed{z=(y\circ z)\circ\bigl((y\circ(y\circ z))\circ y\bigr)}.
-\tag{T}
-\]
-
-This is valid for all \(y,z\in M\).
-
-Specializing \(y=x\), \(z=c_{k-1}\) reproduces the recurrence:
-
-\[
-c_{k-1}=c_k\circ((x\circ c_k)\circ x)=c_k\circ d_{k+1}.
-\]
-
----
-
-### D. The first specific relation among the \(d_k\)
-
-Set \(k=0\) in the recurrence:
-
-\[
-c_{d-1}=c_0\circ d_1 = x\circ d_1.
-\]
-
-But also \(c_{d-1}=x\circ c_{d-2}\). Cancel \(x\):
-
-\[
-\boxed{d_1=c_{d-2}}.
-\]
-
-Equivalently,
-
-\[
-(x\circ x)\circ x = c_{d-2}.
-\]
-
----
-
-### E. Uniqueness of an index where \(d_j=x\)
-
-Assume \(d_j=c_j\circ x=x\). Use (T) with \(y=c_j\), \(z=x\):
-
-\[
-x=(c_j\circ x)\circ\bigl((c_j\circ(c_j\circ x))\circ c_j\bigr).
-\]
-
-Since \(c_j\circ x=x\), this becomes
-
-\[
-x=x\circ(x\circ c_j)=x\circ c_{j+1}.
-\]
-
-But also \(x=x\circ c_{d-1}\). Cancel \(x\):
-
-\[
-c_{j+1}=c_{d-1}.
-\]
-
-Because \(c_0,\dots,c_{d-1}\) are pairwise distinct,
-
-\[
-\boxed{d_j=x \implies j\equiv d-2\pmod d.}
-\]
-
-So if existence of an index with \(d_j=x\) is proved, it is automatically unique and must be \(j=d-2\).
-
----
-
-## Important equivalences already checked
-
-### 1. In part (c), the two desired identities are equivalent once (b) is known
-
-#### (ii) implies (i)
-
-Assume
-
-\[
-d_{d-2}=c_{d-2}\circ x=x.
-\]
-
-Then from recurrence with \(k=d-3\):
-
-\[
-c_{d-4}=c_{d-3}\circ d_{d-2}=c_{d-3}\circ x=d_{d-3}.
-\]
-
-Now recurrence with \(k=d-4\) gives
-
-\[
-c_{d-5}=c_{d-4}\circ d_{d-3}=c_{d-4}\circ c_{d-4}.
-\]
-
-So
-
-\[
-\boxed{c_{d-2}\circ x=x \implies c_{d-4}\circ c_{d-4}=c_{d-5}.}
-\]
-
-#### (i) implies (ii)
-
-Assume
-
-\[
-c_{d-4}\circ c_{d-4}=c_{d-5}.
-\]
-
-From recurrence with \(k=d-4\),
-
-\[
+1. Try the direct local route first: force `d_{d-2} = x` without asserting any global quotient family.
+2. If that stalls, try a collision or cascade route based on `c_{k-1} = c_k ◦ d_{k+1}` plus a correct anchor.
+3. Only then investigate local transport identities involving `p`, `d_1`, `d_{d-1}`, or nearby orbit terms.
+4. Do not promote a pattern seen at one or two indices into a global law unless the derivation is uniform in `k` and independent of Tier 2 false turns.
+5. If you use model checks, use them to kill an over-strong claim quickly, not to replace proof.
 c_{d-5}=c_{d-4}\circ d_{d-3}.
 \]
 
