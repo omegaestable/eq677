@@ -1,0 +1,329 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+\newcommand{\fin}{\mathrm{fin}}
+\newcommand{\op}{\diamond}
+\newcommand{\E}[1]{\mathrm{E#1}}
+\newcommand{\M}{\mathcal{M}}
+
+\title{A math-first roadmap for the finite implication $\E{677}\Rightarrow_{\fin}\E{255}$}
+\author{Repository dossier}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note consolidates the useful mathematical state of the repository after abandoning
+the computational finite-model program.  The unrestricted implication
+\(\E{677}\Rightarrow\E{255}\) is false, while the finite implication remains open in the
+Equational Theories Project.  The purpose of the note is not to report another search, but
+to isolate the identities, obstructions, and proof/counterexample routes that still look
+mathematically live.
+\end{abstract}
+
+\section{Problem and status}
+
+Let \((M,\op)\) be a magma.  The two laws are
+\[
+\E{677}:\qquad
+x = y\op\bigl(x\op((y\op x)\op y)\bigr),
+\]
+and
+\[
+\E{255}:\qquad
+x = ((x\op x)\op x)\op x.
+\]
+The question in this dossier is:
+\[
+\E{677}\models_{\fin}\E{255}\,?
+\]
+The finite hypothesis is essential.  The ETP hard-implications chapter records the
+unrestricted implication \(\E{677}\not\models\E{255}\), while the finite section lists
+``Does 677 imply 255?'' among the remaining open finite questions
+\cite[Chapter 27]{ETPBlueprintHard}.  The ETP paper states the same open problem
+explicitly and notes that it resisted the major project constructions
+\cite[Problem 8.1]{ETPPaper}.  The ETP dashboard currently reports that the general
+implication graph is complete, but the finite graph has two remaining proof gaps,
+corresponding to this problem and its dual \cite{ETPDashboard}.
+
+\section{External mathematical base}
+
+The main external source is Chapter 13 of the ETP blueprint \cite{ETP677}.  It studies
+finite \(\E{677}\)-magmas and records the following facts.
+
+\begin{itemize}
+\item With \(L_y(z)=y\op z\), \(R_y(z)=z\op y\), and \(Sx=x\op x\), law \(\E{677}\) can be
+written as
+\[
+x=L_yL_xL_{L_yx}y.
+\]
+\item In a finite \(\E{677}\)-magma every left translation \(L_y\) is bijective.  The
+inverse is
+\[
+L_y^{-1}(x)=x\op((y\op x)\op y).
+\]
+Thus left cancellation and left division are available.
+\item If \(y\op x=x\), then \(y=(Sx)\op x\).  Consequently \(\E{255}\) at \(x\) is
+equivalent to solvability of \(y\op x=x\).
+\item Lemma 13.2 gives several equivalent fixed-point formulations, including
+solvability of \(R_x y=x\), \(R_xL_x z=x\), \(L_xR_x z=z\), \(R_xL_x y=y\), and
+\(L_xS y=y\).
+\item Linear and affine-fiber extension families do not give counterexamples
+\cite[Lemmas 13.3 and 13.4]{ETP677}.  This matters because any counterexample route
+must be non-linear or otherwise evade those no-go mechanisms.
+\item Chapter 13.1 gives a finite \(\E{677}\)-magma that is not right-cancellative
+\cite[Section 13.1]{ETP677}.  This warns against importing right-cancellative or
+quasigroup intuition.
+\end{itemize}
+
+The classical background is useful mainly for orientation.  Austin's finite-model work
+\cite{Austin1966} and Kisielewicz's Austin-identity work \cite{Kisielewicz1997} explain
+why finite-vs-infinite behavior can be genuinely subtle for single identities.  Knuth's
+central-groupoid work \cite{Knuth1970} and Knuth--Bendix completion
+\cite{KnuthBendix1970} are relevant precedents for equational laws whose finite and free
+objects behave very differently.  Baader--Nipkow \cite{BaaderNipkow1998}, Willsey et al.
+\cite{Egg2021}, and Koehler et al. \cite{GuidedEqSat2024} are context for rewriting and
+equality saturation, but they should not be treated as a license to restart blind
+computation here.
+
+\section{Trusted local package}
+
+Fix \(x\in M\), where \(M\) is finite and satisfies \(\E{677}\).  Define
+\[
+c_0=x,\qquad c_{k+1}=x\op c_k.
+\]
+Let \(d\) be the minimal period of this \(L_x\)-orbit, so \(c_d=x\) and
+\(c_0,\ldots,c_{d-1}\) are pairwise distinct.  Define
+\[
+d_k=c_k\op x.
+\]
+Use left division \(a\backslash b\) for the unique element \(u\) with \(a\op u=b\).
+
+The following package is safe to use.
+
+\begin{enumerate}
+\item Left translations are bijective, so left cancellation is valid.
+\item The transformed identity
+\[
+z=(y\op z)\op((y\op(y\op z))\op y)
+\]
+is obtained by substituting \(x=y\op z\) into \(\E{677}\) and left-cancelling \(y\).
+\item The orbit recurrence
+\[
+c_{k-1}=c_k\op d_{k+1}
+\]
+follows from applying \(\E{677}\) with \(y=x\) and \(x=c_k\), then cancelling the outer
+left multiplication by \(x\).
+\item \(d_1=c_{d-2}\).
+\item If \(d_j=x\), then \(j=d-2\pmod d\).
+\item The quotient formula
+\[
+a\backslash b=b\op((a\op b)\op a)
+\]
+holds for all \(a,b\).
+\item Safe local orbit identities include
+\[
+x\backslash c_k=c_{k-1},\qquad
+c_k\backslash c_{k-1}=d_{k+1}.
+\]
+With \(p=x\backslash x=c_{d-1}\), also
+\[
+x\backslash p=d_1,\qquad p\backslash d_1=c_1,\qquad p\op c_1=d_1.
+\]
+\end{enumerate}
+
+\section{Useful failures}
+
+The following failures should be treated as mathematical information, not as loose
+warnings.
+
+\begin{itemize}
+\item The quotient family
+\[
+d_k\backslash x=c_{k-2}\op c_{k-1}
+\]
+is false in tracked finite \(\E{677}\)-models that satisfy \(\E{255}\).  It arose from an
+index slip: \(c_{k-1}\op x=d_{k-1}\), not \(d_k\).
+\item The full shift law
+\[
+p\op d_k=d_{k+1},\qquad p=x\backslash x,
+\]
+is also false in tracked finite \(\E{677}\)-models.
+\item Consequently, proving \(d=1\), universal idempotence, or a universal small-period
+theorem for the \(L_x\)-orbit is the wrong target.  Known finite \(\E{677}\)-models can
+have nontrivial orbit period and still satisfy \(\E{255}\).
+\item Any claim that \(c_{d-2}\op x=x\) is already established should be audited.  This
+identity is the clean fixed-point target; using it as an input risks proving the theorem by
+renaming the theorem.
+\item A collision \(d_i=d_j\) gives one recurrence step, but does not by itself imply
+\(d_{i-1}=d_{j-1}\).  Cascade arguments must derive this propagation or avoid needing it.
+\end{itemize}
+
+\section{Live proof routes}
+
+\subsection{Fixed-point route}
+
+By the ETP equivalences, it is enough to prove that for every \(x\) there exists \(u\) with
+\[
+u\op x=x.
+\]
+The most natural local target is
+\[
+c_{d-2}\op x=x.
+\]
+If this target is proved, the finite implication follows immediately from Lemma 13.1 or
+13.2 of the blueprint.  The difficulty is to produce the fixed point without assuming a
+false transport law on the full \(d_k\)-sequence.
+
+\subsection{Left-division route}
+
+The element \(p=x\backslash x=c_{d-1}\) is the natural local actor because \(x\op p=x\).
+The false global shift law says too much, but a weaker local identity involving only
+\[
+p,\quad d_1,\quad d_{d-1},\quad c_{d-2},\quad c_{d-1}
+\]
+may be enough.  A useful target shape is:
+\[
+u\op(c_t\op x)=x
+\]
+for a structurally forced \(u\) and \(t\), or an identity that makes one \(d_t\) equal to
+\(x\).  Once any \(d_t=x\) is obtained, the uniqueness fact pins \(t=d-2\pmod d\).
+
+\subsection{Collision route}
+
+If the map \(k\mapsto d_k\) is injective on \(\mathbb Z/d\mathbb Z\), then \(\E{255}\)
+holds at \(x\).  A contradiction route starts with \(d_i=d_j\), \(i\neq j\), and uses
+\[
+c_{k-1}=c_k\op d_{k+1}
+\]
+to compare backward steps along the \(c\)-orbit.  The known obstruction is that a single
+collision does not automatically propagate to neighboring indices.  A successful proof must
+show either propagation, or a different mechanism forcing a repeated \(c\)-value or a fixed
+point \(d_t=x\).
+
+\subsection{Counterexample route}
+
+The ETP paper says this finite implication resisted the standard constructions
+\cite[Problem 8.1]{ETPPaper}.  Chapter 13 also rules out linear and affine-extension
+counterexamples in broad families \cite[Lemmas 13.3 and 13.4]{ETP677}.  Therefore a
+counterexample attempt should be structural rather than exhaustive: it should explain how
+the construction evades left-division fixed-point mechanisms, linearity, affine fibers, and
+right-cancellative intuition.
+
+\section{Protocol for future notes}
+
+A future proof attempt should state its exact target and audit every use of cancellation.
+Only left cancellation is available by default.  Every new identity must be derived
+uniformly in its indices; agreement at a few orbit positions is not evidence.  If a route
+does not finish, the note should end with a single missing lemma and a short explanation of
+why that lemma would settle the route.
+
+A future counterexample attempt should give the full finite operation, then verify
+\(\E{677}\) and refute \(\E{255}\) by a direct algebraic argument or a complete finite table
+check that is small enough to inspect.  It should not be another parameter sweep.
+
+\begin{thebibliography}{99}
+
+\bibitem{ETPPaper}
+Equational Theories Project Contributors.
+\newblock \emph{The Equational Theories Project: Advancing Collaborative Mathematical Research at Scale}.
+\newblock arXiv:2512.07087, 2025.
+\newblock \url{https://arxiv.org/abs/2512.07087};
+PDF at \url{https://teorth.github.io/equational_theories/paper.pdf}.
+
+\bibitem{ETPRepo}
+Matthew Bolan, Joachim Breitner, Jose Brox, Nicholas Carlini, Mario Carneiro,
+Terence Tao, and the Equational Theories Project contributors.
+\newblock \emph{The Equational Theories Project}.
+\newblock GitHub repository, 2024--2026.
+\newblock \url{https://github.com/teorth/equational_theories}.
+
+\bibitem{ETPDashboard}
+Equational Theories Project.
+\newblock \emph{Dashboard}.
+\newblock \url{https://teorth.github.io/equational_theories/dashboard/}.
+
+\bibitem{ETP677}
+Equational Theories Project.
+\newblock \emph{Blueprint, Chapter 13: Equation 677}.
+\newblock \url{https://teorth.github.io/equational_theories/blueprint/677-chapter.html}.
+
+\bibitem{ETPBlueprintHard}
+Equational Theories Project.
+\newblock \emph{Blueprint, Chapter 27: Hard implications}.
+\newblock \url{https://teorth.github.io/equational_theories/blueprint/hard-implications-chapter.html}.
+
+\bibitem{ETPBibliography}
+Equational Theories Project.
+\newblock \emph{Blueprint bibliography}.
+\newblock \url{https://teorth.github.io/equational_theories/blueprint/sect0001.html}.
+
+\bibitem{Austin1965}
+A. K. Austin.
+\newblock A note on models of identities.
+\newblock \emph{Proceedings of the American Mathematical Society}, 16:522--523, 1965.
+
+\bibitem{Austin1966}
+A. K. Austin.
+\newblock Finite models for laws in two variables.
+\newblock \emph{Proceedings of the American Mathematical Society}, 17:1410--1412, 1966.
+
+\bibitem{Kisielewicz1990}
+Andrzej Kisielewicz.
+\newblock Varieties of algebras with no nontrivial finite members.
+\newblock In \emph{Lattices, semigroups, and universal algebra}, pages 129--136.
+Plenum, New York, 1990.
+
+\bibitem{Kisielewicz1997}
+A. Kisielewicz.
+\newblock Austin identities.
+\newblock \emph{Algebra Universalis}, 38(3):324--328, 1997.
+
+\bibitem{BermanBurris1996}
+Joel Berman and Stanley Burris.
+\newblock A computer study of 3-element groupoids.
+\newblock In \emph{Logic and algebra}, pages 379--429. Routledge, 2017.
+\newblock Originally in Lecture Notes in Pure and Applied Mathematics 180, 1996.
+
+\bibitem{BurrisSankappanavar1981}
+Stanley Burris and H. P. Sankappanavar.
+\newblock \emph{A Course in Universal Algebra}.
+\newblock Graduate Texts in Mathematics 78. Springer, 1981.
+
+\bibitem{Knuth1970}
+Donald E. Knuth.
+\newblock Notes on central groupoids.
+\newblock \emph{Journal of Combinatorial Theory}, 8:376--390, 1970.
+
+\bibitem{KnuthBendix1970}
+Donald E. Knuth and Peter B. Bendix.
+\newblock Simple word problems in universal algebras.
+\newblock In \emph{Computational Problems in Abstract Algebra}, pages 263--297.
+Pergamon, 1970.
+
+\bibitem{BaaderNipkow1998}
+Franz Baader and Tobias Nipkow.
+\newblock \emph{Term Rewriting and All That}.
+\newblock Cambridge University Press, 1998.
+
+\bibitem{Egg2021}
+Max Willsey, Chandrakana Nandi, Yisu Remy Wang, Oliver Flatt,
+Zachary Tatlock, and Pavel Panchekha.
+\newblock egg: Fast and extensible equality saturation.
+\newblock \emph{Proceedings of the ACM on Programming Languages}, 5(POPL):1--29, 2021.
+
+\bibitem{GuidedEqSat2024}
+Thomas Koehler, Andres Goens, Siddharth Bhat, Tobias Grosser,
+Phil Trinder, and Michel Steuwer.
+\newblock Guided equality saturation.
+\newblock \emph{Proceedings of the ACM on Programming Languages}, 8(POPL):1727--1758, 2024.
+
+\end{thebibliography}
+
+\end{document}

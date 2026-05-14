@@ -1,7 +1,0 @@
-Mode: anti255, Base: 9/0, max_K: 3
-K=2 (product size=18):
-  constraints added, solving...
-  UNSAT for K=2
-K=3 (product size=27):
-  constraints added, solving...
-  UNSAT for K=3
