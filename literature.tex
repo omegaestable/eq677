@@ -135,6 +135,27 @@ Substitute \(y\op z\) for \(x\) in \(\E{677}\).  This gives
 Cancel the common left factor \(y\) using Proposition \ref{prop:left-division}.
 \end{proof}
 
+\begin{lemma}[Key identity]\label{lem:key-identity}
+Let \(M\) be a finite magma satisfying \(\E{677}\).  Then
+\[
+   (y\op(y\op z))\op y
+   =z\op(((y\op z)\op z)\op(y\op z))
+\]
+for all \(y,z\in M\).
+\end{lemma}
+
+\begin{proof}
+Lemma \ref{lem:transformed} gives
+\[
+   z=(y\op z)\op((y\op(y\op z))\op y).
+\]
+On the other hand, applying \(\E{677}\) with the parameter \(y\op z\) gives
+\[
+   z=(y\op z)\op\bigl(z\op(((y\op z)\op z)\op(y\op z))\bigr).
+\]
+Left cancellation by \(y\op z\) gives the identity.
+\end{proof}
+
 \section{The orbit package}
 
 Fix a finite \(\E{677}\)-magma \(M\) and an element \(x\in M\).  Define
@@ -221,6 +242,21 @@ Two left cancellations yield \(c_j=d_1=c_{d-2}\), so the minimality of the orbit
 gives the claimed congruence.
 \end{proof}
 
+\begin{corollary}[No two-cycle in the \(L_x\)-orbit]\label{cor:no-two-cycle}
+The period \(d\) is never equal to \(2\).  If \(d=1\), then \(\EqAt{\E{255}}{x}\)
+holds.  Hence a counterexample point must have \(d\geq 3\).
+\end{corollary}
+
+\begin{proof}
+If \(d=1\), then \(x\op x=x\), and so
+\[
+   ((x\op x)\op x)\op x=(x\op x)\op x=x\op x=x.
+\]
+If \(d=2\), Lemma \ref{lem:orbit-recurrence} gives \(d_1=c_{d-2}=c_0=x\).  But
+Lemma \ref{lem:forced-index} applied with \(j=1\) would give
+\(1\equiv d-2\equiv 0\pmod 2\), a contradiction.
+\end{proof}
+
 \section{The route graph}
 
 The following display is the dependency graph used in the rest of the note.  The first
@@ -245,13 +281,14 @@ If the fixed point is not established, the two honest remaining branches are
 \begin{array}{ccccc}
 d_i=d_j=e
 &\Longrightarrow& (c_i\op e)\op c_i=(c_j\op e)\op c_j
-&\dashrightarrow& c_i\op e=c_j\op e\ \text{or a fixed point},\\[2mm]
+&\dashrightarrow& \text{finite counting pressure on }y\mapsto y\op e,\\[2mm]
 x\notin\operatorname{im}R_x
 &\Longrightarrow& y\op x=z\op x=r
 &\Longrightarrow& (y\op r)\op y=r\backslash x.
 \end{array}
 \]
-The dashed arrow is a missing lemma, not a theorem.
+The dashed arrow is a missing lemma, not a theorem; the collision branch is now best
+viewed as a counting problem rather than a direct propagation problem.
 
 \section{The fixed-point frontier}
 
@@ -334,6 +371,66 @@ that simply rewrites \(\E{677}\) into Lemma L without using finite structure sho
 treated as suspect.
 \end{remark}
 
+\begin{lemma}[Fixed-map and edge-product form]\label{lem:fixed-map}
+For the fixed element \(x\), define
+\[
+   H_x(t)=((x\op t)\op x),
+   \qquad
+   F_x(t)=x\op(t\op x).
+\]
+Then
+\[
+   x\backslash t=t\op H_x(t) \tag{E}
+\]
+for every \(t\in M\), and
+\[
+   F_x(L_x(t))=L_x(H_x(t)). \tag{Conj}
+\]
+Consequently \(F_x\) and \(H_x\) have the same finite cycle structure.  Moreover
+\(\EqAt{\E{255}}{x}\) is equivalent to either of these maps having a fixed point.
+Thus, at a counterexample point \(x\), both maps are fixed-point-free and every
+cycle of either map has length at least \(2\).
+\end{lemma}
+
+\begin{proof}
+Apply \(\E{677}\) with parameter \(x\) and law variable \(t\):
+\[
+   t=x\op\bigl(t\op((x\op t)\op x)\bigr)=x\op(t\op H_x(t)).
+\]
+This is exactly (E).  The conjugacy identity is immediate:
+\[
+   F_x(L_x(t))=x\op((x\op t)\op x)=L_x(H_x(t)).
+\]
+Since \(L_x\) is bijective, (Conj) gives the same cycle structure.
+
+If \(F_x(z)=z\), then
+\[
+   x\op(z\op x)=z.
+\]
+The left-inverse formula for \(L_x\), applied to \(z\), also gives
+\[
+   x\op\bigl(z\op((x\op z)\op x)\bigr)=z.
+\]
+Left cancellation by \(x\), then by \(z\), yields \((x\op z)\op x=x\).  Hence a
+right fixed-point witness over \(x\) exists, and Proposition \ref{prop:unique-witness}
+gives \(\EqAt{\E{255}}{x}\).  Conversely, if \(u\op x=x\), set
+\[
+   z=u\op((x\op u)\op x).
+\]
+Then \(x\op z=u\) by \(\E{677}\) with parameter \(x\), and another use of the same
+identity gives \(z=x\op(z\op x)\), so \(F_x(z)=z\).  Finally, fixed points of
+\(F_x\) and \(H_x\) correspond through the bijection \(L_x\) by (Conj).
+\end{proof}
+
+\begin{remark}
+Identity (E) turns the fixed-point route into a finite dynamics problem.  If
+\(H_x(t)=t\), then \(x\backslash t=t\op t\), equivalently \(L_x(S(t))=t\), which is
+the last fixed-point form in the ETP Lemma 13.2 list.  In a bad point, the forward
+orbit of any element under \(H_x\) must eventually enter a cycle of length greater
+than \(1\).  A finite proof via this route would have to show that such an
+\(H_x\)-cycle is incompatible with the edge products \(x\backslash t=t\op H_x(t)\).
+\end{remark}
+
 \section{Collision frontier}
 
 The orbit recurrence suggests a collision strategy, but the exact missing step is narrow.
@@ -360,20 +457,30 @@ If \(d_i=d_j=e\), left cancellation by \(e\) yields (C).  If also
 \(i\equiv j\pmod d\).
 \end{proof}
 
-\begin{problem}[Collision-lift target]\label{prob:collision-target}
-Prove or refute the following implication inside finite \(\E{677}\)-magmas:
-if \(d_i=d_j=e\), then either \(q\op x=x\) already, or
+\begin{problem}[Collision-counting target]\label{prob:collision-target}
+Turn a nontrivial collision \(d_i=d_j=e\) into a finite counting contradiction, or into
+the fixed point \(q\op x=x\).  More precisely, let
 \[
-   c_i\op e=c_j\op e.
+   F_e=\{y\in M:y\op x=e\},
+   \qquad
+   A_e(y)=y\op e.
 \]
-Together with Proposition \ref{prop:collision-lift}, this would rule out nontrivial
-collisions unless the desired fixed point has already been found.
+Proposition \ref{prop:collision-lift}, and more generally Proposition
+\ref{prop:rectangles}, show that \(A_e\) is injective on \(F_e\).  Thus the old direct
+target \(c_i\op e=c_j\op e\) is not a plausible standalone propagation lemma for a
+genuine collision: it is precisely what the splitter forbids unless a separate argument
+has already produced the fixed point.  A collision proof should instead find a natural
+finite set \(B_e\) such that
+\[
+   A_e(F_e)\subseteq B_e
+\]
+and \(|B_e|<|F_e|\), unless \(q\op x=x\).
 \end{problem}
 
 The common shortcut ``prove \(k\mapsto d_k\) injective'' is not by itself a proof of the
 main theorem.  It becomes useful only if the argument also connects the resulting
-injectivity to the forced fixed point \(q\op x=x\), or if it supplies the missing
-alternative in Problem \ref{prob:collision-target}.
+injectivity to the forced fixed point \(q\op x=x\), or if it supplies the counting
+pressure requested in Problem \ref{prob:collision-target}.
 
 \section{Counterexample frontier}
 
@@ -421,6 +528,24 @@ permutation condition
 A counterexample at \(x_0\) would additionally require \(\sigma(a)(x_0)\neq x_0\) for
 every label \(a\).  This is not merely a group-theoretic condition on a subgroup of
 \(\operatorname{Sym}(M)\); the labeling map \(a\mapsto\sigma(a)\) is part of the data.
+In fact this labeling map is injective.  If \(\sigma(y)=\sigma(z)\), choose any
+\(x\) and put \(e=y\op x=z\op x\).  The two specializations of \(\E{677}\) give
+\[
+   x=y\op(x\op(e\op y)),
+   \qquad
+   x=z\op(x\op(e\op z)).
+\]
+Since \(L_y=L_z\), the first equality may be rewritten with left factor \(z\).  Left
+cancellation by \(z\), then by \(x\), and finally by \(e\), gives \(y=z\).  Thus a
+counterexample in this language is an injectively labeled set of permutations.  In
+particular, if \(y\op x=z\op x=r\) with \(y\neq z\), the two distinct permutations
+\(\sigma(y),\sigma(z)\) agree at \(x\) but must separate at \(r\):
+\[
+   \sigma(y)(r)\neq \sigma(z)(r),
+   \qquad
+   \sigma(\sigma(y)(r))(y)=r\backslash x=
+   \sigma(\sigma(z)(r))(z).
+\]
 
 Second, one may seek nonlinear fiber extensions over positive \(\E{677}\)-models.  The
 ETP affine-extension obstruction \cite[Lemma 13.4]{ETP677} rules out the obvious affine
@@ -463,7 +588,8 @@ argument that uses finite structure explicitly.
 
 \begin{problem}[Collision route]
 Resolve Problem \ref{prob:collision-target}: from \(d_i=d_j=e\), derive either the
-fixed point \(q\op x=x\) or the equality \(c_i\op e=c_j\op e\).
+fixed point \(q\op x=x\) or a finite counting contradiction for the injective splitter
+\(A_e(y)=y\op e\) on the fiber \(F_e=\{y:y\op x=e\}\).
 \end{problem}
 
 \begin{problem}[Counterexample route]

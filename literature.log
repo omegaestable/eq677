@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.4.22)  14 MAY 2026 10:52
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.4.22)  14 MAY 2026 12:48
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -390,19 +390,19 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 [1
 
 {C:/Users/nacho/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}] [2]
-[3] [4] [5] [6] [7]
-Underfull \hbox (badness 2443) in paragraph at lines 523--526
+[3] [4] [5] [6] [7] [8]
+Underfull \hbox (badness 2443) in paragraph at lines 649--652
 []\T1/cmr/m/n/10.95 Equational The-o-ries Project.  Dash-board.  [][]$\T1/cmtt/
 m/n/10.95 https : / / teorth . github . io / equational _
  []
 
-
-Underfull \hbox (badness 10000) in paragraph at lines 533--536
+[9]
+Underfull \hbox (badness 10000) in paragraph at lines 659--662
 [][]$\T1/cmtt/m/n/10.95 https : / / teorth . github . io / equational _ theorie
 s / blueprint / infinite-[]model-[]chapter .
  []
 
-[8] [9] (literature.aux)
+[10] (literature.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
@@ -411,13 +411,13 @@ Package rerunfilecheck Info: File `literature.out' has not changed.
 (rerunfilecheck)             Checksum: 954B7F8C4FA61222B557EDCB3327758E;1508.
  ) 
 Here is how much of TeX's memory you used:
- 10350 strings out of 467871
- 156121 string characters out of 5418376
- 577677 words of memory out of 5000000
- 39044 multiletter control sequences out of 15000+600000
+ 10362 strings out of 467871
+ 156291 string characters out of 5418376
+ 577830 words of memory out of 5000000
+ 39049 multiletter control sequences out of 15000+600000
  647231 words of font info for 92 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,12n,79p,549b,566s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,12n,79p,549b,592s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\nacho\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ectt
 1095.pk> <C:\Users\nacho\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi60
 0\ecti1095.pk> <C:\Users\nacho\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec
@@ -440,9 +440,9 @@ type1/public/amsfonts/cm/cmr7.pfb><C:/Users/nacho/AppData/Local/Programs/MiKTeX
 /MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/nacho/AppData/Local
 /Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy8.pfb><C:/Users/nacho/AppDa
 ta/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msam10.pfb>
-Output written on literature.pdf (9 pages, 272526 bytes).
+Output written on literature.pdf (10 pages, 283548 bytes).
 PDF statistics:
- 613 PDF objects out of 1000 (max. 8388607)
- 68 named destinations out of 1000 (max. 500000)
+ 632 PDF objects out of 1000 (max. 8388607)
+ 75 named destinations out of 1000 (max. 500000)
  81 words of extra memory for PDF output out of 10000 (max. 10000000)
 

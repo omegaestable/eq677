@@ -6,6 +6,7 @@ This is the handoff for the next agent. The repo is now a proof dossier, not a s
 
 - Target: decide whether every finite magma satisfying `E677` satisfies `E255`.
 - Current theorem status: open.
+- Latest route pass: `route_pass_2026-05-14.md` adds the fixed-point gate `h=(q*x)*q`, the key identity `(y*(y*z))*y=z*(((y*z)*z)*(y*z))`, the fixed-map form `x\t=t*((x*t)*x)`, downgrades the raw collision-lift route to a counting-only route, and sharpens counterexample work to injectively labeled permutation systems / witness-fiber maps over positive bases.
 - Unrestricted status: false; the free `E677` magma does not satisfy `E255`.
 - ETP status: the paper calls this the last remaining finite implication up to duality and tentatively conjectures it is false. Treat that as strategic color, not evidence.
 - Allowed computation: only source lookup and document compilation. No brute force, SAT/SMT, ATP batches, model enumeration, or numerical testing.
@@ -32,6 +33,10 @@ These may be used, but cite or rederive them when writing a proof.
   \[
   z=(y*z)*((y*(y*z))*y).
   \]
+- Key identity:
+  \[
+  (y*(y*z))*y=z*(((y*z)*z)*(y*z)).
+  \]
 - Orbit recurrence:
   \[
   c_{k-1}=c_k*d_{k+1}.
@@ -41,6 +46,8 @@ These may be used, but cite or rederive them when writing a proof.
 - With `p=x\x=c_{d-1}`:
   `x\c_k=c_{k-1}`, `c_k\c_{k-1}=d_{k+1}`, `x\p=d_1`, `p\d_1=c_1`, and `p*c_1=d_1`.
 - ETP fixed-point equivalence: `E255` at `x` is equivalent to existence of `u` with `u*x=x`.
+- Fixed-map form: with `H_x(t)=(x*t)*x`, `x\t=t*H_x(t)`.  `H_x` is conjugate via `L_x` to `F_x(t)=x*(t*x)`, and `E255` at `x` is equivalent to either map having a fixed point.
+- The `L_x`-orbit period is never `2`; a counterexample point has period at least `3`.
 
 ## Current Frontiers
 
@@ -65,7 +72,7 @@ Equivalent sharp targets:
 
 These are targets, not established lemmas.
 
-### 2. Collision Lift
+### 2. Collision Lift / Counting Only
 
 If `d_i=d_j=e`, transformed E677 with `y=c_k,z=x` gives
 
@@ -75,13 +82,19 @@ If `d_i=d_j=e`, transformed E677 with `y=c_k,z=x` gives
 
 If `i != j`, then also `c_i*e != c_j*e`; otherwise left cancellation collapses `c_i=c_j`.
 
-Sharp missing lemma:
+The old sharp missing lemma was:
 
 ```text
 d_i=d_j  =>  either q*x=x already, or c_i*e=c_j*e.
 ```
 
-That would rule out nontrivial collisions through the displayed lifted equality. Do not replace this with unsupported collision propagation.
+This would rule out nontrivial collisions through the displayed lifted equality, but the 2026-05-14 audit shows it is not a promising direct propagation target: every right fiber has an injective splitter.  For fixed `x` and `e`, if
+
+```text
+F_e={y:y*x=e},  A_e(y)=y*e,
+```
+
+then `(y*e)*y=e\x` for all `y in F_e`, and `A_e` is injective on `F_e`.  Thus a genuine collision already forces `c_i*e != c_j*e`.  The collision route now needs a finite counting restriction on the possible splitter values; do not try to prove `c_i*e=c_j*e` directly without also producing the fixed point.
 
 ### 3. Counterexample Rectangles
 
@@ -101,7 +114,7 @@ Distinct collided elements must split under the second probe `t -> t*r`: if also
 
 Honest counterexample languages:
 
-- labeled-permutation sections `a*b=sigma(a)(b)`, where all `sigma(a)` are permutations and `sigma(y)sigma(x)sigma(sigma(y)x)(y)=x`;
+- labeled-permutation sections `a*b=sigma(a)(b)`, where all `sigma(a)` are permutations, the label map `a -> sigma(a)` is injective, and `sigma(y)sigma(x)sigma(sigma(y)x)(y)=x`;
 - genuinely nonlinear fiber extensions over positive `E677` bases.
 
 Both must explicitly build the right-collision rectangles above while preserving left bijectivity.
@@ -123,9 +136,9 @@ Also do not promote model agreement, old logs, or examples from deleted search f
 
 ## Work Order
 
-1. Try the fixed-point target `q*x=x`. If using finite-map lemmas from ETP Chapter 5, first derive an actual self-map identity involving `L_x`, `R_x`, `S`, `L_q`, or left division; then apply the finite lemma.
-2. If fixed-point work stalls, attack the collision lift: derive `c_i*e=c_j*e` or a fixed point from `d_i=d_j=e`.
-3. For counterexamples, begin from the right-collision rectangle law. A proposed construction that does not explain those rectangles is not yet a construction.
+1. Try the fixed-point target `q*x=x`. The sharp finite-map version is now: rule out nontrivial cycles of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. If using finite-map lemmas from ETP Chapter 5, first derive an actual self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division; then apply the finite lemma.
+2. If fixed-point work stalls, use the collision lift only as a counting problem: find a natural small target set for the injective splitter `A_e(y)=y*e`, or explain why no such set is available. Do not revive unsupported collision propagation.
+3. For counterexamples, begin from the right-collision rectangle law and the injective labeled-permutation constraint. A proposed construction that does not explain those rectangles is not yet a construction.
 4. End every attempt with exactly one missing lemma if the proof is unfinished.
 
 ## Writeup Protocol

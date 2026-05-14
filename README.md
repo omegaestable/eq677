@@ -24,7 +24,8 @@ The current working status is **open**. The unrestricted implication is false, b
 
 1. Read [literature.tex](literature.tex) for the consolidated mathematical roadmap, source notes, trusted identities, failed routes, and bibliography.
 2. Read [RAILROAD.md](RAILROAD.md) for the cold-start handoff protocol for a new agent.
-3. Do not revive computational search unless a new structural lemma makes a very specific check mathematically informative.
+3. Read [route_pass_2026-05-14.md](route_pass_2026-05-14.md) for the latest audited route pass: the fixed-map cycle target, the collision-route downgrade, and the counterexample constraints.
+4. Do not revive computational search unless a new structural lemma makes a very specific check mathematically informative.
 
 ## Policy
 
