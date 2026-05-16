@@ -172,7 +172,7 @@ complement partitions `3,1,1`, `2,2,1`, `2,1,1,1`, and `1,1,1,1,1` are `unsat`.
 The remaining larger partitions are being split by `g=q*x`: complement `5` has
 `g=0,1,2,3,4` `unsat`, where `g=4` closed after the single residual `a*q=8` was split
 by all ten `g*q` values, and `g=5` is down to `a*q=7,8,9` after `a*q=2,5,6` closed by
-`g*q`.  Complement `4,1` has every `g` value except `g=7` `unsat`,
+`g*q`; `g=6` is down to `a*q=5,7,8,9` after `a*q=2` closed by `g*q`.  Complement `4,1` has every `g` value except `g=7` `unsat`,
 and `g=7` has only `a*q=5,8` residuals, now split by `g*q`.  Complement `3,2` has
 `g=0,1,2,3,4` `unsat`, where `g=4` is closed by splitting `a*q`; remaining residuals
 are `g=5/a*q=4,6`, `g=6/a*q=7,8`, and `g=7/a*q=2,5,7`, while `g=8,9` timed out in the

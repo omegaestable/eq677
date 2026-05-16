@@ -142,7 +142,8 @@ timed out once at `900 s`.  In period `5`, complement partitions `3,1,1`, `2,2,1
 timed out at `300 s` and are being split by `g=q*x`.  Current period-five split progress:
 complement `5` has `g=0,1,2,3,4` `unsat`, with `g=4` closed after splitting the lone
 `a*q=8` residual by all ten `g*q` values; `g=5` is down to `a*q=7,8,9` after
-`a*q=2,5,6` closed by `g*q`, and `g=6` has `a*q=2,5,7,8,9` residuals;
+`a*q=2,5,6` closed by `g*q`, and `g=6` is down to `a*q=5,7,8,9` after
+`a*q=2` closed by `g*q`;
 complement `4,1` has every `g` value except `g=7` `unsat`, with `g=7` under an `a*q`
 split and only `a*q=5,8` residuals remaining; complement `3,2` has `g=0,1,2,3,4`
 `unsat` after closing `g=4` by `a*q`, with residuals `g=5/a*q=4,6`,
@@ -163,3 +164,10 @@ searcher now records `p*x=(q*q)*q=a*(q*q)`.  In period five, with
 `g=a*((b*a)*b)`, `q*((a*q)*a)=x`, `(a*q)*a=x*(g*q)`, and `g notin {x,b}`.
 In period six, with `x=c0,a=c1,b=c2,c=c3,q=c4,p=c5,h=c*x,g=q*x`, it records
 `h=a*((b*a)*b)`, `g=b*((c*b)*c)`, `q*((a*q)*a)=x`, `(a*q)*a=x*(g*q)`, and `g!=x`.
+
+Queued implementation improvement: once the current long loops finish, extend
+`--lx-complement-cycles` with the same local recurrence already used on the principal
+orbit.  If a complement `L_x` cycle is labeled cyclically as `e_i -> e_{i+1}`, add
+`e_i*(e_{i+1}*x)=e_{i-1}` for every position.  This is a direct instance of the proven
+local recurrence and should prune period-five and period-six partition splits without
+adding any new branch assumption.

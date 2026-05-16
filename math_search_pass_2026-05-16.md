@@ -259,7 +259,7 @@ Z3 timeout.
 | `order=10`, period `9` | `unsat`, about `458 s` in the broad run |
 | `order=10`, period `5`, complement `3,1,1`, `2,2,1`, `2,1,1,1`, `1,1,1,1,1` | all `unsat` |
 | `order=10`, period `5`, complement `5`, `4,1`, `3,2` | timeout at `300 s`; split by `g=q*x` active |
-| `order=10`, period `5`, complement `5`, `g=0,1,2,3,4` | all `unsat`; `g=4` closed after the lone `a*q=8` residual split by all ten `g*q` values; `g=5` now has only `a*q=7,8,9` residuals after `a*q=2,5,6` closed by `g*q`; `g=6` has `a*q=2,5,7,8,9` residuals; `g=7,8,9` timed out in the parent |
+| `order=10`, period `5`, complement `5`, `g=0,1,2,3,4` | all `unsat`; `g=4` closed after the lone `a*q=8` residual split by all ten `g*q` values; `g=5` now has only `a*q=7,8,9` residuals after `a*q=2,5,6` closed by `g*q`; `g=6` now has only `a*q=5,7,8,9` residuals after `a*q=2` closed by `g*q`; `g=7,8,9` timed out in the parent |
 | `order=10`, period `5`, complement `4,1`, `g=0,1,2,3,4,5,6,8,9` | all `unsat`; `g=7` has only `a*q=5,8` residuals, now split by `g*q` |
 | `order=10`, period `5`, complement `3,2`, `g=0,1,2,3,4` | all `unsat`, with `g=4` closed by the `a*q` split; `g=5` has only `a*q=4,6` residuals; `g=6` has only `a*q=7,8` residuals; `g=7` has only `a*q=2,5,7` residuals; `g=8,9` timed out in the parent |
 | `order=10`, period `6`, complement `2,1,1` and `1,1,1,1` | both `unsat` |
