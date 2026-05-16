@@ -4,7 +4,11 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage[margin=1in]{geometry}
+\usepackage{xurl}
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+% ChkTeX false-positives on literal hyphens inside DOI and URL strings.
+% chktex-file 8
 
 \newcommand{\fin}{\mathrm{fin}}
 \newcommand{\op}{\diamond}
@@ -21,6 +25,7 @@
 \theoremstyle{definition}
 \newtheorem{definition}[theorem]{Definition}
 \newtheorem{problem}[theorem]{Problem}
+\newtheorem{target}[theorem]{Target}
 
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
@@ -33,14 +38,13 @@
 \maketitle
 
 \begin{abstract}
-The Equational Theories Project leaves open, up to duality, the finite implication
-\(\E{677}\models_{\fin}\E{255}\) for magmas, while the corresponding unrestricted
-implication is known to be false.  This note records a checked package of reductions for
-that remaining finite problem.  The main output is a route graph: the target law at a
-point is equivalent to a unique right fixed point, to a left-division identity called
-Lemma L, and to several constrained collision and counterexample conditions.  The note
-also isolates false trails that should not be reused, including a previously suspected
-quotient family and a full-shift law.  No proof or finite counterexample is claimed.
+This note records a proof-oriented package of reductions for the finite implication
+\(\E{677}\models_{\fin}\E{255}\) for magmas.  The main output is a route graph: the
+target law at a point is equivalent to a unique right fixed point, to a left-division
+identity called Lemma L, and to several finite orbit and collision targets.  The orbit
+package now excludes periods \(2\) and \(3\), and isolates a period-four gate.  The note
+also quarantines false trails that should not be reused, including a previously suspected
+quotient family and a full-shift law.
 \end{abstract}
 
 \noindent\textbf{2020 Mathematics Subject Classification.}
@@ -58,25 +62,23 @@ studied here are
 \E{677}:&\qquad x=y\op\bigl(x\op((y\op x)\op y)\bigr),\\
 \E{255}:&\qquad x=((x\op x)\op x)\op x.
 \end{align*}
-The problem is the finite implication
+The goal is the finite implication
 \[
    \E{677}\models_{\fin}\E{255},
 \]
 that is, whether every finite magma satisfying \(\E{677}\) also satisfies \(\E{255}\).
-The unrestricted implication \(\E{677}\models\E{255}\) is false.  The Equational Theories
-Project (ETP) paper records the finite problem as the only unresolved finite implication
-up to duality, equivalently together with the dual implication
-\(\E{2910}\models_{\fin}\E{47}\), and tentatively conjectures the implication to be
-false \cite[Problem 8.1]{ETPPaper}.  The ETP blueprint chapter on Equation 677 contains
-the local structure theory and the known no-go statements for standard counterexample
-families \cite{ETP677}; the dashboard records the graph status \cite{ETPDashboard}.
+The Equational Theories Project (ETP) paper singles out this finite implication, up to
+duality, together with the dual implication \(\E{2910}\models_{\fin}\E{47}\)~\cite[Problem
+8.1]{ETPPaper}.  The ETP blueprint chapter on Equation 677 contains the local structure
+theory and the standard finite obstructions used below~\cite{ETP677}; the dashboard is a
+source for cross-checking equation labels~\cite{ETPDashboard}.
 
-This note is not a computational search report.  Its purpose is to make the remaining
-mathematical problem sharper.  The reductions below are organized around a fixed element
-\(x\) of a finite \(\E{677}\)-magma.  They show that the target law at \(x\) is the same
-as a single right fixed point, that any such fixed-point witness is unique, and that the
-same target can be expressed as a left-division identity (Lemma L).  The complementary
-sections describe what a collision proof or a finite counterexample would have to supply.
+This note is a proof dossier, not a broad search report.  The reductions below are
+organized around a fixed element \(x\) of a finite \(\E{677}\)-magma.  They show that the
+target law at \(x\) is the same as a single right fixed point, that any such fixed-point
+witness is unique, and that the same target can be expressed as a left-division identity
+(Lemma L).  The later sections turn possible failures of the direct fixed-point route
+into explicit finite orbit and collision targets.
 
 \section{Preliminaries and external input}
 
@@ -119,15 +121,15 @@ for all \(a,b\in M\).
 \end{lemma}
 
 \begin{proof}
-For the first identity, Proposition \ref{prop:left-division}, applied to
+For the first identity, Proposition~\ref{prop:left-division}, applied to
 \(a\backslash b\) in place of \(b\), gives
 \[
    a\backslash(a\backslash b)
    =(a\backslash b)\op((a\op(a\backslash b))\op a)
    =(a\backslash b)\op(b\op a),
 \]
-because \(a\op(a\backslash b)=b\).  For the second identity, Proposition
-\ref{prop:left-division} gives
+because \(a\op(a\backslash b)=b\).  For the second identity,
+Proposition~\ref{prop:left-division} gives
 \[
    b\op((a\op b)\op a)=a\backslash b,
 \]
@@ -135,15 +137,17 @@ so uniqueness of left division by \(b\) gives
 \(b\backslash(a\backslash b)=(a\op b)\op a\).
 \end{proof}
 
-The ETP chapter also records several strategic facts that are used here only as external
-input.  The unrestricted implication \(\E{677}\not\models\E{255}\) is witnessed by the
-free \(\E{677}\)-magma \cite[Section 13.2]{ETP677}.  Linear models satisfying
-\(\E{677}\) satisfy \(\E{255}\), and affine-fiber extensions over such models do not
-produce counterexamples \cite[Lemmas 13.3--13.4]{ETP677}.  The same chapter gives finite
-\(\E{677}\)-magmas that are not right-cancellative \cite[Section 13.1]{ETP677}.  Hence no
-argument below may use right cancellation, associativity, an identity element, or group or
-quasigroup intuition unless such structure has first been derived.  The finite-map lemmas
-in the ETP finite chapter are a natural source of future tools \cite[Lemmas 5.5--5.7]{ETPFinite}.
+The ETP chapter also records several strategic facts that are used here only as proof
+discipline.  The unrestricted implication \(\E{677}\not\models\E{255}\) is witnessed by
+the free \(\E{677}\)-magma~\cite[Section 13.2]{ETP677}; therefore any derivation of the
+finite implication must use finite structure somewhere.  Linear models satisfying
+\(\E{677}\) satisfy \(\E{255}\), and affine-fiber extensions over such models are ruled
+out by the ETP structure theory~\cite[Lemmas 13.3--13.4]{ETP677}.  The same chapter gives
+finite \(\E{677}\)-magmas that are not right-cancellative~\cite[Section 13.1]{ETP677}.
+Hence no argument below may use right cancellation, associativity, an identity element, or
+group or quasigroup intuition unless such structure has first been derived.  The finite-map
+lemmas in the ETP finite chapter are a natural source of future proof tools~\cite[Lemmas
+5.5--5.7]{ETPFinite}.
 
 \begin{lemma}[Transformed identity]\label{lem:transformed}
 Let \(M\) be a finite magma satisfying \(\E{677}\).  Then
@@ -159,7 +163,7 @@ Substitute \(y\op z\) for \(x\) in \(\E{677}\).  This gives
    y\op z
    =y\op\bigl((y\op z)\op((y\op(y\op z))\op y)\bigr).
 \]
-Cancel the common left factor \(y\) using Proposition \ref{prop:left-division}.
+Cancel the common left factor \(y\) using Proposition~\ref{prop:left-division}.
 \end{proof}
 
 \begin{lemma}[Key identity]\label{lem:key-identity}
@@ -172,7 +176,7 @@ for all \(y,z\in M\).
 \end{lemma}
 
 \begin{proof}
-Lemma \ref{lem:transformed} gives
+Lemma~\ref{lem:transformed} gives
 \[
    z=(y\op z)\op((y\op(y\op z))\op y).
 \]
@@ -236,13 +240,13 @@ and
 
 \begin{proof}
 The first identity follows from \(c_k=x\op c_{k-1}\).  The second is precisely the
-recurrence in Lemma \ref{lem:orbit-recurrence}.  Since \(x\op c_{d-1}=c_d=x\), one has
+recurrence in Lemma~\ref{lem:orbit-recurrence}.  Since \(x\op c_{d-1}=c_d=x\), one has
 \(p=c_{d-1}\), and then
 \[
    q=x\backslash p=x\backslash c_{d-1}=c_{d-2}=d_1.
 \]
-Also \(d_1=c_1\op x=(x\op x)\op x\).  Finally, Lemma
-\ref{lem:division-calculus}, applied with \(a=x\) and \(b=x\), gives
+Also \(d_1=c_1\op x=(x\op x)\op x\).  Finally,
+Lemma~\ref{lem:division-calculus}, applied with \(a=x\) and \(b=x\), gives
 \[
    x\backslash p=p\op(x\op x).
 \]
@@ -255,7 +259,7 @@ If \(d_j=x\), then \(j\equiv d-2\pmod d\).
 \end{lemma}
 
 \begin{proof}
-The condition \(d_j=x\) says \(c_j\op x=x\).  Lemma \ref{lem:transformed} with
+The condition \(d_j=x\) says \(c_j\op x=x\).  Lemma~\ref{lem:transformed} with
 \(y=c_j,z=x\) gives
 \[
    x=x\op(x\op c_j).
@@ -270,7 +274,7 @@ gives the claimed congruence.
 
 \begin{corollary}[No two-cycle in the \(L_x\)-orbit]\label{cor:no-two-cycle}
 The period \(d\) is never equal to \(2\).  If \(d=1\), then \(\EqAt{\E{255}}{x}\)
-holds.  Hence a counterexample point must have \(d\geq 3\).
+holds.
 \end{corollary}
 
 \begin{proof}
@@ -278,17 +282,155 @@ If \(d=1\), then \(x\op x=x\), and so
 \[
    ((x\op x)\op x)\op x=(x\op x)\op x=x\op x=x.
 \]
-If \(d=2\), Lemma \ref{lem:orbit-recurrence} gives \(d_1=c_{d-2}=c_0=x\).  But
-Lemma \ref{lem:forced-index} applied with \(j=1\) would give
+If \(d=2\), Lemma~\ref{lem:orbit-recurrence} gives \(d_1=c_{d-2}=c_0=x\).  But
+Lemma~\ref{lem:forced-index} applied with \(j=1\) would give
 \(1\equiv d-2\equiv 0\pmod 2\), a contradiction.
+\end{proof}
+
+\begin{lemma}[No three-cycle in the \(L_x\)-orbit]\label{lem:no-three-cycle}
+The period \(d\) is never equal to \(3\).  Consequently any point at which the target
+has not yet been established must have \(d\geq 4\).
+\end{lemma}
+
+\begin{proof}
+Assume for contradiction that \(d=3\).  Put
+\[
+   a=c_1=x\op x,
+   \qquad
+   p=c_2=x\backslash x,
+   \qquad
+   e=p\op x .
+\]
+Since \(d_1=c_{d-2}=c_1\), one has
+\[
+   a\op x=a . \tag{1}
+\]
+The orbit recurrence gives, for \(k=1\) and \(k=2\),
+\[
+   x=a\op e,
+   \qquad
+   a=p\op a . \tag{2}
+\]
+Apply \(\E{677}\) with law variable \(a\) and parameter \(p\).  Using \((2)\),
+\[
+   a=p\op\bigl(a\op((p\op a)\op p)\bigr)
+    =p\op(a\op(a\op p)).
+\]
+Comparing this with \(a=p\op a\) and left-cancelling by \(p\) gives
+\[
+   a\op(a\op p)=a.
+\]
+Comparing with \((1)\) and left-cancelling by \(a\) gives
+\[
+   a\op p=x . \tag{3}
+\]
+Together with \(x=a\op e\), this implies \(e=p\) by left cancellation by \(a\).
+
+Now apply \(\E{677}\) with law variable \(x\) and parameter \(a\).  Using \((1)\),
+\[
+   x=a\op\bigl(x\op((a\op x)\op a)\bigr)
+    =a\op(x\op(a\op a)).
+\]
+Comparing with \(x=a\op e\) and left-cancelling by \(a\) gives
+\[
+   x\op(a\op a)=e=p.
+\]
+Since \(x\op a=p\), left cancellation by \(x\) gives
+\[
+   a\op a=a . \tag{4}
+\]
+Finally, Lemma~\ref{lem:transformed} with \(y=a\) and \(z=x\), together with
+\((1)\) and \((4)\), gives
+\[
+   x=(a\op x)\op((a\op(a\op x))\op a)
+    =a\op((a\op a)\op a)
+    =a.
+\]
+This contradicts the minimality of the period, since \(c_0\neq c_1\) when \(d=3\).
+\end{proof}
+
+\begin{lemma}[Period-four gate]\label{lem:period-four-gate}
+Assume that the \(L_x\)-orbit of \(x\) has period \(4\).  Put
+\[
+   a=c_1=x\op x,
+   \qquad
+   q=c_2,
+   \qquad
+   p=c_3=x\backslash x,
+   \qquad
+   r=q\op x .
+\]
+Then
+\[
+   x\op a=q,
+   \qquad
+   a\op x=q,
+   \qquad
+   a\op r=x,
+   \qquad
+   x\op q=p,
+   \qquad
+   p\op a=q.
+\]
+Moreover \(r\notin\{x,a,q\}\).  Thus, with respect to this element \(r\), a
+period-four proof has two remaining targets: eliminate either \(r=p\), or the case
+where \(r\) lies outside the principal \(L_x\)-orbit.
+\end{lemma}
+
+\begin{proof}
+The equality \(x\op a=q\) is the definition of \(c_2\), and \(a\op x=q\) is
+\(d_1=c_{d-2}\) in the case \(d=4\).  The remaining displayed relations are the
+orbit definition and the orbit recurrence at \(k=1\) and \(k=3\):
+\[
+   a\op r=x,
+   \qquad
+   p\op a=q.
+\]
+If \(r=x\), then \(x=a\op r=a\op x=q\), contradicting \(c_0\neq c_2\).  If
+\(r=a\), then \(q\op x=a\) and \(a\op a=x\).  Lemma~\ref{lem:transformed},
+applied with \(y=q\) and \(z=x\), gives
+\[
+   x=(q\op x)\op((q\op(q\op x))\op q)=a\op((q\op a)\op q).
+\]
+Comparing with \(x=a\op a\), left cancellation by \(a\) gives
+\[
+   (q\op a)\op q=a . \tag{5}
+\]
+Lemma~\ref{lem:key-identity}, applied with \(y=q\) and \(z=x\), gives
+\[
+   (q\op(q\op x))\op q=x\op(((q\op x)\op x)\op(q\op x)).
+\]
+Using \(q\op x=a\), \(a\op x=q\), and \((5)\), this becomes
+\[
+   a=x\op(q\op a).
+\]
+Since \(a=x\op x\), left cancellation by \(x\) gives \(q\op a=x\).  Then
+\((5)\) gives \(a=x\op q=p\), contradicting \(c_1\neq c_3\).
+
+If \(r=q\), then \(q\op x=q\) and \(a\op q=x\).  Lemma~\ref{lem:key-identity},
+applied with \(y=a\) and \(z=x\), gives
+\[
+   (a\op(a\op x))\op a=x\op(((a\op x)\op x)\op(a\op x)).
+\]
+Using \(a\op x=q\), \(q\op x=q\), and \(a\op q=x\), this becomes
+\[
+   q=x\op(q\op q).
+\]
+Since \(q=x\op a\), left cancellation by \(x\) gives \(q\op q=a\).  Applying
+Lemma~\ref{lem:key-identity} with \(y=q\) and \(z=x\), and using \(q\op x=q\),
+now gives
+\[
+   x=(q\op(q\op x))\op q=x\op(((q\op x)\op x)\op(q\op x))=x\op(q\op q)=q,
+\]
+contradicting \(c_0\neq c_2\).
 \end{proof}
 
 \section{The route graph}
 
 The following display is the dependency graph used in the rest of the note.  The first
-row contains equivalent fixed-point targets.  The two lower branches describe the two
-ways an unfinished proof can still move: collision lifting or explicit counterexample
-construction.
+row contains equivalent fixed-point targets.  The two lower branches describe two proof
+mechanisms available after the direct fixed-point route: collision lifting and
+right-collision rigidity.
 \[
 \begin{array}{cccccc}
 \EqAt{\E{255}}{x}
@@ -316,7 +458,7 @@ x\notin\operatorname{im}R_x
 The dashed arrow is a missing lemma, not a theorem; the collision branch is now best
 viewed as a counting problem rather than a direct propagation problem.
 
-\section{The fixed-point frontier}
+\section{The fixed-point route}
 
 The fixed-point route is sharper than the existential formulation suggests.
 
@@ -330,8 +472,8 @@ Consequently \(\EqAt{\E{255}}{x}\) is equivalent to the existence of \(u\) with
 \end{proposition}
 
 \begin{proof}
-The first half of the proof is the argument already used in Lemma \ref{lem:forced-index}.
-If \(u\op x=x\), then Lemma \ref{lem:transformed} gives
+The first half of the proof is the argument already used in Lemma~\ref{lem:forced-index}.
+If \(u\op x=x\), then Lemma~\ref{lem:transformed} gives
 \[
    x=x\op(x\op u).
 \]
@@ -356,7 +498,7 @@ With the notation above, the following are equivalent:
 
 \begin{proof}
 The equivalence of (1) and (2) is just uniqueness of left division by \(q\).  To identify
-the left quotient, apply Lemma \ref{lem:transformed} with \(y=x\op x\) and \(z=x\):
+the left quotient, apply Lemma~\ref{lem:transformed} with \(y=x\op x\) and \(z=x\):
 \[
    x=q\op\bigl(((x\op x)\op q)\op(x\op x)\bigr).
 \]
@@ -366,7 +508,7 @@ Therefore
 \]
 which proves the equivalence of (2) and (3), because \(q=(x\op x)\op x\).
 
-For (4), use Proposition \ref{prop:left-division}:
+For (4), use Proposition~\ref{prop:left-division}:
 \[
    q\backslash x=x\op((q\op x)\op q).
 \]
@@ -386,13 +528,13 @@ For the fixed element \(x\), write \(\mathrm{L}(x)\) for the identity
 \[
    ((x\op x)\op((x\op x)\op x))\op(x\op x)=x.
 \]
-By Proposition \ref{prop:local-targets}, \(\mathrm{L}(x)\) is equivalent, in the present
+By Proposition~\ref{prop:local-targets}, \(\mathrm{L}(x)\) is equivalent, in the present
 finite \(\E{677}\) setting, to \(\EqAt{\E{255}}{x}\).
 \end{definition}
 
 \begin{remark}
 Lemma L is a target, not an established lemma.  Because the unrestricted implication
-\(\E{677}\models\E{255}\) is false \cite[Section 13.2]{ETP677}, any successful proof of
+\(\E{677}\models\E{255}\) is false~\cite[Section 13.2]{ETP677}, any successful proof of
 the fixed-point route must use finiteness in a visible way: for example through left
 bijection, orbit periodicity, a finite-map lemma, or a collision argument.  A derivation
 that simply rewrites \(\E{677}\) into Lemma L without using finite structure should be
@@ -424,8 +566,8 @@ and the fixed point of \(H_x\) is
 \[
    x\backslash(x\backslash q).
 \]
-Thus, at a counterexample point \(x\), both maps are fixed-point-free and every
-cycle of either map has length at least \(2\).
+Thus, if the target fails at \(x\), both maps are fixed-point-free and every cycle of
+either map has length at least \(2\).
 \end{lemma}
 
 \begin{proof}
@@ -437,7 +579,7 @@ This is exactly (E).  The conjugacy identity is immediate:
 \[
    F_x(L_x(t))=x\op((x\op t)\op x)=L_x(H_x(t)).
 \]
-Since \(L_x\) is bijective by Proposition \ref{prop:left-division}, (Conj) gives the
+Since \(L_x\) is bijective by Proposition~\ref{prop:left-division}, (Conj) gives the
 same cycle structure: \(L_x\) carries each \(H_x\)-cycle to an \(F_x\)-cycle, and
 \(L_x^{-1}\) carries each \(F_x\)-cycle back to an \(H_x\)-cycle.
 
@@ -450,7 +592,7 @@ The left-inverse formula for \(L_x\), applied to \(z\), also gives
    x\op\bigl(z\op((x\op z)\op x)\bigr)=z.
 \]
 Left cancellation by \(x\), then by \(z\), yields \((x\op z)\op x=x\).  Hence a
-right fixed-point witness over \(x\) exists, and Proposition \ref{prop:unique-witness}
+right fixed-point witness over \(x\) exists, and Proposition~\ref{prop:unique-witness}
 gives \(\EqAt{\E{255}}{x}\).  More precisely, the same proposition gives
 \[
    x\op z=q,
@@ -470,9 +612,10 @@ corresponding fixed point of \(H_x\) is \(x\backslash(x\backslash q)\).
 \begin{remark}
 Identity (E) turns the fixed-point route into a finite dynamics problem.  If
 \(H_x(t)=t\), then \(x\backslash t=t\op t\), equivalently \(L_x(S(t))=t\), which is
-the last fixed-point form in the ETP Lemma 13.2 list.  In a bad point, the forward
-orbit of any element under \(H_x\) must eventually enter a cycle of length greater
-than \(1\).  A finite proof via this route would have to show that such an
+the last fixed-point form in the ETP Lemma 13.2 list.  At a point where the fixed-point
+target has not yet been established, the forward orbit of any element under \(H_x\) must
+eventually enter a cycle of length greater than \(1\).  A finite proof via this route
+would have to show that such an
 \(H_x\)-cycle is incompatible with the edge products \(x\backslash t=t\op H_x(t)\).
 \end{remark}
 
@@ -492,7 +635,7 @@ example, when \(x=0\), the cycle is
    1\mapsto 3\mapsto 4\mapsto 2\mapsto 1 .
 \]
 So the finite-map target is not to rule out all nontrivial \(H_x\)-cycles.  It is to
-rule out the fixed-point-free \(H_x\)-dynamics forced at a bad point, using the edge
+rule out the fixed-point-free \(H_x\)-dynamics forced before the target is proved, using the edge
 products \(x\backslash t=t\op H_x(t)\) or an actual finite-map identity of the kind used
 in the ETP finite-map lemmas.
 \end{remark}
@@ -507,12 +650,12 @@ self-maps of a finite set.  The immediate identities
    L_x^{-1}=L_x^{-1}\circ L_x^{-1}\circ L_x
 \]
 only recover the tautology \(L_x=L_x\circ L_x^{-1}\circ L_x\).  They do not involve the
-right translation \(R_x\), the maps \(H_x=R_xL_x\), \(F_x=L_xR_x\), or the gate
+right translation \(R_x\), the maps \(H_x=R_x\circ L_x\), \(F_x=L_x\circ R_x\), or the gate
 \(t\mapsto(t\op x)\op t\).  A future finite-map proof should therefore display a
 non-tautological identity for one of those maps before invoking Lemma 5.5 or Lemma 5.6.
 \end{remark}
 
-\section{Collision frontier}
+\section{Collision target}
 
 The orbit recurrence suggests a collision strategy, but the exact missing step is narrow.
 
@@ -528,7 +671,7 @@ If in addition \(i\not\equiv j\pmod d\), then
 \end{proposition}
 
 \begin{proof}
-Lemma \ref{lem:transformed} with \(y=c_k\) and \(z=x\) gives
+Lemma~\ref{lem:transformed} with \(y=c_k\) and \(z=x\) gives
 \[
    x=d_k\op((c_k\op d_k)\op c_k).
 \]
@@ -538,7 +681,7 @@ If \(d_i=d_j=e\), left cancellation by \(e\) yields (C).  If also
 \(i\equiv j\pmod d\).
 \end{proof}
 
-\begin{problem}[Collision-counting target]\label{prob:collision-target}
+\begin{target}[Collision-counting target]\label{prob:collision-target}
 Turn a nontrivial collision \(d_i=d_j=e\) into a finite counting contradiction, or into
 the fixed point \(q\op x=x\).  More precisely, let
 \[
@@ -546,8 +689,8 @@ the fixed point \(q\op x=x\).  More precisely, let
    \qquad
    A_e(y)=y\op e.
 \]
-Proposition \ref{prop:collision-lift}, and more generally Proposition
-\ref{prop:rectangles}, show that \(A_e\) is injective on \(F_e\).  Thus the old direct
+Proposition~\ref{prop:collision-lift}, and more generally
+Proposition~\ref{prop:rectangles}, show that \(A_e\) is injective on \(F_e\).  Thus the old direct
 target \(c_i\op e=c_j\op e\) is not a plausible standalone propagation lemma for a
 genuine collision: it is precisely what the splitter forbids unless a separate argument
 has already produced the fixed point.  A collision proof should instead find a natural
@@ -556,19 +699,19 @@ finite set \(B_e\) such that
    A_e(F_e)\subseteq B_e
 \]
 and \(|B_e|<|F_e|\), unless \(q\op x=x\).
-\end{problem}
+\end{target}
 
 The common shortcut ``prove \(k\mapsto d_k\) injective'' is not by itself a proof of the
 main theorem.  It becomes useful only if the argument also connects the resulting
 injectivity to the forced fixed point \(q\op x=x\), or if it supplies the counting
-pressure requested in Problem \ref{prob:collision-target}.
+pressure requested in Target~\ref{prob:collision-target}.
 
-\section{Counterexample frontier}
+\section{Right-collision constraints}
 
-Suppose a finite counterexample exists and choose \(x\in M\) with
-\(q\op x\neq x\).  Proposition \ref{prop:unique-witness} says that no element \(u\) has
-\(u\op x=x\).  Thus \(x\notin\operatorname{im}R_x\).  Since \(M\) is finite, \(R_x\) is
-not injective, and there exist \(y\neq z\) and \(r\neq x\) such that
+Suppose the fixed-point target fails at \(x\), so \(q\op x\neq x\).  Proposition~\ref{prop:unique-witness}
+says that no element \(u\) has \(u\op x=x\).  Thus \(x\notin\operatorname{im}R_x\).  Since
+\(M\) is finite, \(R_x\) is not injective, and there exist \(y\neq z\) and \(r\neq x\)
+such that
 \[
    y\op x=z\op x=r.
 \]
@@ -583,7 +726,7 @@ Consequently, if \(y\op x=z\op x=r\) and \(y\op r=z\op r\), then \(y=z\).
 \end{proposition}
 
 \begin{proof}
-Lemma \ref{lem:transformed} with \(y=y\) and \(z=x\) gives
+Lemma~\ref{lem:transformed} with \(y=y\) and \(z=x\) gives
 \[
    x=r\op((y\op r)\op y),
 \]
@@ -591,13 +734,14 @@ which is exactly (R).  If \(y\op r=z\op r=s\), then (R) gives \(s\op y=s\op z\).
 cancellation by \(s\) gives \(y=z\).
 \end{proof}
 
-This proposition is a counterexample design constraint.  A candidate finite counterexample
-must contain right-collision fibers for every bad point \(x\), but those fibers must split
-under the second probe \(t\mapsto t\op r\), while all elements in the fiber preserve the
-same twisted diagonal value \((t\op r)\op t=r\backslash x\).
+This proposition is used here as a proof constraint.  If the fixed-point route has not
+yet produced \(q\op x=x\), then right-collision fibers must split under the second probe
+\(t\mapsto t\op r\), while all elements in the fiber preserve the same twisted diagonal
+value \((t\op r)\op t=r\backslash x\).  A proof may use this rigidity for counting or
+collision lifting.
 
-There are two plausible construction languages that respect this constraint.  First,
-because all left translations are permutations, one may write
+For bookkeeping, it is often useful to write the left translations as labels.  Since all
+left translations are permutations, one may write
 \[
    a\op b=\sigma(a)(b)
 \]
@@ -606,8 +750,7 @@ permutation condition
 \[
    \sigma(y)\bigl(\sigma(x)(\sigma(\sigma(y)(x))(y))\bigr)=x.
 \]
-A counterexample at \(x_0\) would additionally require \(\sigma(a)(x_0)\neq x_0\) for
-every label \(a\).  This is not merely a group-theoretic condition on a subgroup of
+The labeling condition is not merely a group-theoretic condition on a subgroup of
 \(\operatorname{Sym}(M)\); the labeling map \(a\mapsto\sigma(a)\) is part of the data.
 In fact this labeling map is injective.  If \(\sigma(y)=\sigma(z)\), choose any
 \(x\) and put \(e=y\op x=z\op x\).  The two specializations of \(\E{677}\) give
@@ -617,9 +760,9 @@ In fact this labeling map is injective.  If \(\sigma(y)=\sigma(z)\), choose any
    x=z\op(x\op(e\op z)).
 \]
 Since \(L_y=L_z\), the first equality may be rewritten with left factor \(z\).  Left
-cancellation by \(z\), then by \(x\), and finally by \(e\), gives \(y=z\).  Thus a
-counterexample in this language is an injectively labeled set of permutations.  In
-particular, if \(y\op x=z\op x=r\) with \(y\neq z\), the two distinct permutations
+cancellation by \(z\), then by \(x\), and finally by \(e\), gives \(y=z\).  Thus the
+labeling is injective.  In particular, if \(y\op x=z\op x=r\) with \(y\neq z\), the two
+distinct permutations
 \(\sigma(y),\sigma(z)\) agree at \(x\) but must separate at \(r\):
 \[
    \sigma(y)(r)\neq \sigma(z)(r),
@@ -628,10 +771,8 @@ particular, if \(y\op x=z\op x=r\) with \(y\neq z\), the two distinct permutatio
    \sigma(\sigma(z)(r))(z).
 \]
 
-Second, one may seek nonlinear fiber extensions over positive \(\E{677}\)-models.  The
-ETP affine-extension obstruction \cite[Lemma 13.4]{ETP677} rules out the obvious affine
-version, so a successful extension would have to be genuinely nonlinear and would still
-need to realize the rectangles in Proposition \ref{prop:rectangles}.
+The ETP affine-extension obstruction~\cite[Lemma 13.4]{ETP677} is therefore best used as
+a warning against importing linear or affine intuition into this proof target.
 
 \section{Obstructions and false routes}
 
@@ -655,7 +796,7 @@ is also quarantined.  It is not a consequence of the trusted local package.
 would contradict known nontrivial positive models from the ETP finite theory.  Such a
 claim should therefore be audited before it is used.
 \item A proof that \(H_x(t)=((x\op t)\op x)\) has no nontrivial cycles is false as a
-global statement: Remark \ref{rem:hx-cycles} gives a positive \(\mathbb F_5\) model with
+global statement: Remark~\ref{rem:hx-cycles} gives a positive \(\mathbb F_5\) model with
 nontrivial \(H_x\)-cycles.  Only fixed-point-free bad-point dynamics is a live target.
 \item A citation of the ETP finite-map lemmas is not by itself a finite proof.  Those
 lemmas require a non-tautological self-map identity; the formal inverse identities for
@@ -664,38 +805,35 @@ lemmas require a non-tautological self-map identity; the formal inverse identiti
 \(d_{i-1}=d_{j-1}\).  Any cascade proof must derive the propagation or avoid it.
 \end{enumerate}
 
-\section{Open frontiers}
+\section{Proof targets}
 
-The work above leaves three precise frontiers.
+The work above leaves three precise proof targets.
 
-\begin{problem}[Fixed-point route]
-Prove \(q\op x=x\), equivalently Lemma L from Definition \ref{def:lemma-l}, by an
+\begin{target}[Fixed-point route]
+Prove \(q\op x=x\), equivalently Lemma L from Definition~\ref{def:lemma-l}, by an
 argument that uses finite structure explicitly.
-\end{problem}
+\end{target}
 
-\begin{problem}[Collision route]
-Resolve Problem \ref{prob:collision-target}: from \(d_i=d_j=e\), derive either the
+\begin{target}[Collision route]
+Resolve Target~\ref{prob:collision-target}: from \(d_i=d_j=e\), derive either the
 fixed point \(q\op x=x\) or a finite counting contradiction for the injective splitter
 \(A_e(y)=y\op e\) on the fiber \(F_e=\{y:y\op x=e\}\).
-\end{problem}
+\end{target}
 
-\begin{problem}[Counterexample route]
-Construct a finite labeled-permutation model or a genuinely nonlinear fiber extension
-satisfying \(\E{677}\), violating \(\E{255}\), and satisfying the right-collision
-rectangle constraints of Proposition \ref{prop:rectangles}.  A table-free parameter
-search is not a construction; any proposed example should include a complete finite table
-or a checkable structural verification.
-\end{problem}
+\begin{target}[Period-four route]
+Eliminate the two remaining cases in Lemma~\ref{lem:period-four-gate}: \(r=p\), and
+\(r\notin\{x,a,q,p\}\).  This is the shortest current orbit-level proof target.
+\end{target}
 
 \appendix
 
 \section{Proof audit checklist}
 
-The reductions in this note use left cancellation only after Proposition
-\ref{prop:left-division}, where finiteness has made each \(L_a\) bijective.  They do not
+The reductions in this note use left cancellation only after
+Proposition~\ref{prop:left-division}, where finiteness has made each \(L_a\) bijective.  They do not
 use right cancellation, associativity, an identity element, or group/quasigroup structure.
-Future work on this problem should state which of the three frontiers it attacks and end,
-if unfinished, with one missing lemma rather than a broad search prescription.
+Future work should state which proof target it attacks and end, if unfinished, with one
+missing lemma rather than a broad search prescription.
 
 Every new proof attempt should check the following list before being added to the
 mathematical record.
@@ -705,8 +843,8 @@ mathematical record.
 \item Every use of finiteness is named: left bijectivity, orbit periodicity, a finite-map
 lemma, or pigeonhole reasoning for a self-map.
 \item The false quotient family and false full-shift law are not used.
-\item Any counterexample claim contains either a complete finite operation or a structural
-verification of \(\E{677}\) and failure of \(\E{255}\).
+\item Any claimed obstruction or construction contains either a complete finite operation
+or a structural verification of the relevant identities.
 \end{enumerate}
 
 \begin{thebibliography}{99}
@@ -720,111 +858,111 @@ Emmanuel Osalotioman Osazuwa, Giovanni Paolini, Marco Petracci, Bernhard Reinke,
 David Renshaw, Marcus Rossel, Cody Roux, Jeremy Scanvic, Shreyas Srinivas,
 Anand Rao Tadipatri, Terence Tao, Vlad Tsyrklevich, Fernando Vaquerizo-Villar,
 Daniel Weber, and Fan Zheng.
-\newblock The Equational Theories Project: Advancing collaborative mathematical research
+\newblock{} The Equational Theories Project: Advancing collaborative mathematical research
 at scale.
-\newblock arXiv:2512.07087, 2025.
-\newblock \url{https://arxiv.org/abs/2512.07087}; DOI:
+\newblock{} arXiv:2512.07087, 2025.
+\newblock{} \url{https://arxiv.org/abs/2512.07087}; DOI\@:
 \url{https://doi.org/10.48550/arXiv.2512.07087}.
 
 \bibitem{ETPRepo}
 Equational Theories Project contributors.
-\newblock \emph{The Equational Theories Project}.
-\newblock GitHub repository, 2024--2026.
-\newblock \url{https://github.com/teorth/equational_theories}.
+\newblock{} \emph{The Equational Theories Project}.
+\newblock{} GitHub repository, 2024--2026.
+\newblock{} \url{https://github.com/teorth/equational_theories}.
 
 \bibitem{ETPDashboard}
 Equational Theories Project.
-\newblock Dashboard.
-\newblock \url{https://teorth.github.io/equational_theories/dashboard/}.
+\newblock{} Dashboard.
+\newblock{} \url{https://teorth.github.io/equational_theories/dashboard/}.
 
 \bibitem{ETP677}
 Equational Theories Project.
-\newblock Blueprint, Chapter 13: Equation 677.
-\newblock \url{https://teorth.github.io/equational_theories/blueprint/677-chapter.html}.
+\newblock{} Blueprint, Chapter 13: Equation 677.
+\newblock{} \url{https://teorth.github.io/equational_theories/blueprint/677-chapter.html}.
 
 \bibitem{ETPFinite}
 Equational Theories Project.
-\newblock Blueprint, Chapter 5: Finite implications and infinite models.
-\newblock \url{https://teorth.github.io/equational_theories/blueprint/infinite-model-chapter.html}.
+\newblock{} Blueprint, Chapter 5: Finite implications and infinite models.
+\newblock{} \url{https://teorth.github.io/equational_theories/blueprint/infinite-model-chapter.html}.
 
 \bibitem{ETPBlueprintHard}
 Equational Theories Project.
-\newblock Blueprint, Chapter 27: Hard implications.
-\newblock \url{https://teorth.github.io/equational_theories/blueprint/hard-implications-chapter.html}.
+\newblock{} Blueprint, Chapter 27: Hard implications.
+\newblock{} \url{https://teorth.github.io/equational_theories/blueprint/hard-implications-chapter.html}.
 
 \bibitem{Austin1965}
 A. K. Austin.
-\newblock A note on models of identities.
-\newblock \emph{Proceedings of the American Mathematical Society}, 16:522--523, 1965.
-\newblock DOI: \url{https://doi.org/10.1090/S0002-9939-1965-0174649-7}; JSTOR:
+\newblock{} A note on models of identities.
+\newblock{} \emph{Proceedings of the American Mathematical Society}, 16:522--523, 1965.
+\newblock{} DOI\@: \url{https://doi.org/10.1090/S0002-9939-1965-0174649-7}; JSTOR\@:
 \url{https://doi.org/10.2307/2034688}.
 
 \bibitem{Austin1966}
 A. K. Austin.
-\newblock Finite models for laws in two variables.
-\newblock \emph{Proceedings of the American Mathematical Society}, 17:1410--1412, 1966.
-\newblock DOI: \url{https://doi.org/10.1090/S0002-9939-1966-0199134-9}; JSTOR:
+\newblock{} Finite models for laws in two variables.
+\newblock{} \emph{Proceedings of the American Mathematical Society}, 17:1410--1412, 1966.
+\newblock{} DOI\@: \url{https://doi.org/10.1090/S0002-9939-1966-0199134-9}; JSTOR\@:
 \url{https://doi.org/10.2307/2035753}.
 
 \bibitem{Kisielewicz1990}
 Andrzej Kisielewicz.
-\newblock Varieties of algebras with no nontrivial finite members.
-\newblock In \emph{Lattices, Semigroups, and Universal Algebra}, pages 129--136.
+\newblock{} Varieties of algebras with no nontrivial finite members.
+\newblock{} In \emph{Lattices, Semigroups, and Universal Algebra}, pages 129--136.
 Plenum, New York, 1990.
-\newblock DOI: \url{https://doi.org/10.1007/978-1-4899-2608-1_14}.
+\newblock{} DOI\@: \url{https://doi.org/10.1007/978-1-4899-2608-1_14}.
 
 \bibitem{Kisielewicz1997}
 A. Kisielewicz.
-\newblock Austin identities.
-\newblock \emph{Algebra Universalis}, 38(3):324--328, 1997.
-\newblock DOI: \url{https://doi.org/10.1007/s000120050057}.
+\newblock{} Austin identities.
+\newblock{} \emph{Algebra Universalis}, 38(3):324--328, 1997.
+\newblock{} DOI\@: \url{https://doi.org/10.1007/s000120050057}.
 
 \bibitem{BermanBurris1996}
 Joel Berman and Stanley Burris.
-\newblock A computer study of 3-element groupoids.
-\newblock In \emph{Logic and Algebra}, Lecture Notes in Pure and Applied Mathematics 180,
+\newblock{} A computer study of 3-element groupoids.
+\newblock{} In \emph{Logic and Algebra}, Lecture Notes in Pure and Applied Mathematics 180,
 pages 379--429. Marcel Dekker, 1996.
-\newblock Reprint DOI: \url{https://doi.org/10.1201/9780203748671-18}.
+\newblock{} Reprint DOI\@: \url{https://doi.org/10.1201/9780203748671-18}.
 
 \bibitem{BurrisSankappanavar1981}
 Stanley Burris and H. P. Sankappanavar.
-\newblock \emph{A Course in Universal Algebra}.
-\newblock Graduate Texts in Mathematics 78. Springer, New York, 1981.
-\newblock ISBN 978-0-387-90578-5.
+\newblock{} \emph{A Course in Universal Algebra}.
+\newblock{} Graduate Texts in Mathematics 78. Springer, New York, 1981.
+\newblock{} ISBN 978-0-387-90578-5.
 
 \bibitem{Knuth1970}
 Donald E. Knuth.
-\newblock Notes on central groupoids.
-\newblock \emph{Journal of Combinatorial Theory}, 8:376--390, 1970.
-\newblock DOI: \url{https://doi.org/10.1016/S0021-9800(70)80032-1}.
+\newblock{} Notes on central groupoids.
+\newblock{} \emph{Journal of Combinatorial Theory}, 8:376--390, 1970.
+\newblock{} DOI\@: \url{https://doi.org/10.1016/S0021-9800(70)80032-1}.
 
 \bibitem{KnuthBendix1970}
 Donald E. Knuth and Peter B. Bendix.
-\newblock Simple word problems in universal algebras.
-\newblock In \emph{Computational Problems in Abstract Algebra}, pages 263--297.
+\newblock{} Simple word problems in universal algebras.
+\newblock{} In \emph{Computational Problems in Abstract Algebra}, pages 263--297.
 Pergamon, 1970.
-\newblock DOI: \url{https://doi.org/10.1016/B978-0-08-012975-4.50028-X}; reprint DOI:
+\newblock{} DOI\@: \url{https://doi.org/10.1016/B978-0-08-012975-4.50028-X}; reprint DOI\@:
 \url{https://doi.org/10.1007/978-3-642-81955-1_23}.
 
 \bibitem{BaaderNipkow1998}
 Franz Baader and Tobias Nipkow.
-\newblock \emph{Term Rewriting and All That}.
-\newblock Cambridge University Press, 1998.
-\newblock DOI: \url{https://doi.org/10.1017/CBO9781139172752}.
+\newblock{} \emph{Term Rewriting and All That}.
+\newblock{} Cambridge University Press, 1998.
+\newblock{} DOI\@: \url{https://doi.org/10.1017/CBO9781139172752}.
 
 \bibitem{Egg2021}
 Max Willsey, Chandrakana Nandi, Yisu Remy Wang, Oliver Flatt,
 Zachary Tatlock, and Pavel Panchekha.
-\newblock egg: Fast and extensible equality saturation.
-\newblock \emph{Proceedings of the ACM on Programming Languages}, 5(POPL):1--29, 2021.
-\newblock DOI: \url{https://doi.org/10.1145/3434304}.
+\newblock{} egg: Fast and extensible equality saturation.
+\newblock{} \emph{Proceedings of the ACM on Programming Languages}, 5(POPL):1--29, 2021.
+\newblock{} DOI\@: \url{https://doi.org/10.1145/3434304}.
 
 \bibitem{GuidedEqSat2024}
 Thomas Koehler, Andres Goens, Siddharth Bhat, Tobias Grosser,
 Phil Trinder, and Michel Steuwer.
-\newblock Guided equality saturation.
-\newblock \emph{Proceedings of the ACM on Programming Languages}, 8(POPL):1727--1758, 2024.
-\newblock DOI: \url{https://doi.org/10.1145/3632900}.
+\newblock{} Guided equality saturation.
+\newblock{} \emph{Proceedings of the ACM on Programming Languages}, 8(POPL):1727--1758, 2024.
+\newblock{} DOI\@: \url{https://doi.org/10.1145/3632900}.
 
 \end{thebibliography}
 

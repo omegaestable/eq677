@@ -1,8 +1,11 @@
 # Route pass, 2026-05-14
 
-## Status
+## Role
 
-Reduced to missing lemmas. No proof of `E677 =>_fin E255` and no finite counterexample is claimed. No brute-force search, SAT/SMT, ATP batch, model enumeration, or numerical testing was used; this pass used only the existing dossier and source lookup in the ETP blueprint.
+Historical audit pass for local proof targets. No brute-force search, SAT/SMT, ATP batch,
+model enumeration, or numerical testing was used; this pass used only the existing
+dossier and source lookup in the ETP blueprint. For live work, start from `RAILROAD.md`
+and the period-four gate in `literature.tex`.
 
 Notation follows `RAILROAD.md`: fix `x`, set `a=x*x`, `p=x\x`, `q=x\p=a*x=d_1=c_{d-2}`, and let `*` denote the magma operation.
 
@@ -41,7 +44,9 @@ So the fixed-point route is now the gate-collapse target
 (q*x)*q = p.
 ```
 
-This is the same target as in `literature.tex`, but the new useful bookkeeping is that the obstruction has a name: in a counterexample the element `h=(q*x)*q` is a definite non-`p` preimage satisfying `x*h=q\x`.
+This is the same target as in `literature.tex`, but the useful bookkeeping is that a
+failure of the gate has a name: the element `h=(q*x)*q` is a definite non-`p` preimage
+satisfying `x*h=q\x`.
 
 ### Argument
 
@@ -162,13 +167,15 @@ and `|B_e|` is strictly smaller than the collided orbit fiber unless `q*x=x`.
 
 Without such a size restriction, the collision route has no remaining independent mechanism.
 
-## Route 3: counterexample construction
+## Route 3: right-collision constraints
 
 ### Claim
 
-The right-collision rectangles impose a sharper design constraint on two counterexample languages.
+The right-collision rectangles impose a sharper constraint on any proof route that passes
+through a failed fixed-point target.
 
-First, in labeled-permutation notation `a*b=sigma(a)(b)`, a bad point `x` has no label sending `x` to itself. Hence the column map
+First, in labeled-permutation notation `a*b=sigma(a)(b)`, if the fixed-point target fails
+at `x`, then no label sends `x` to itself. Hence the column map
 
 ```text
 y |-> sigma(y)(x)
@@ -180,7 +187,7 @@ misses `x` and has a collision. If
 sigma(y)(x)=sigma(z)(x)=r,
 ```
 
-then the construction must force the code condition
+then the rectangle constraint forces the code condition
 
 ```text
 sigma(y)(r) != sigma(z)(r),
@@ -188,7 +195,7 @@ sigma(sigma(y)(r))(y) = r\x,
 sigma(sigma(z)(r))(z) = r\x.
 ```
 
-Second, for a homomorphic finite fiber extension `pi : M -> G` over a positive base `G` satisfying `E255`, badness cannot occur at the base level. If `x` lies over `g` and `q_G=(g*g)*g`, then `q_G*g=g` in the base. A bad lift must make the fiber map
+Second, for a homomorphic finite fiber extension `pi : M -> G` over a positive base `G` satisfying `E255`, a failure at a lift cannot occur at the base level. If `x` lies over `g` and `q_G=(g*g)*g`, then `q_G*g=g` in the base. A failed lift must make the fiber map
 
 ```text
 Phi_x : pi^{-1}(q_G) -> pi^{-1}(g),
@@ -213,7 +220,7 @@ For the fiber-extension statement, homomorphicity gives
 pi(u*x)=pi(u)*pi(x)=q_G*g=g
 ```
 
-whenever `pi(u)=q_G`. Thus `Phi_x` maps the witness fiber over `q_G` into the fiber over `g`. If `x` is a bad lift, no `u` satisfies `u*x=x`, so `x` is missing from the image of `Phi_x`. With equal finite fiber sizes, `Phi_x` cannot be injective. Thus there are distinct `u,v` over `q_G` with
+whenever `pi(u)=q_G`. Thus `Phi_x` maps the witness fiber over `q_G` into the fiber over `g`. If the lift fails the fixed-point target, no `u` satisfies `u*x=x`, so `x` is missing from the image of `Phi_x`. With equal finite fiber sizes, `Phi_x` cannot be injective. Thus there are distinct `u,v` over `q_G` with
 
 ```text
 u*x=v*x=r != x,
@@ -227,7 +234,7 @@ The argument uses only left bijectivity, transformed `E677`, homomorphic project
 
 ### Next lemma
 
-For a nonlinear equal-fiber extension over a positive base, construct or rule out a bad lift by analyzing the witness-fiber map `Phi_x`. The exact missing statement is:
+For a nonlinear equal-fiber extension over a positive base, analyze the witness-fiber map `Phi_x`. The exact proof target is:
 
 ```text
 Every non-surjective Phi_x compatible with the right-fiber rectangles violates E677 somewhere else.
@@ -237,13 +244,13 @@ This is narrower than a general table search: the collision must occur over the 
 
 ## Global audit
 
-This pass leaves the theorem open. It adds one fixed-point gate, downgrades the standalone collision route to a counting-only route, and sharpens counterexample construction to a witness-fiber obstruction. All products above are parenthesized when ambiguity matters, every cancellation is left cancellation, and no banned move from `RAILROAD.md` is used.
+This pass records one fixed-point gate, downgrades the standalone collision route to a counting-only route, and sharpens right-collision constraints to a witness-fiber obstruction. All products above are parenthesized when ambiguity matters, every cancellation is left cancellation, and no banned move from `RAILROAD.md` is used.
 
 ## Deeper source pass addendum
 
-### Status
+### Role
 
-Reduced to sharper missing lemmas. The ETP blueprint source and the formal `Equation677.lean` file were checked for structural lemmas; no hidden proof of the finite implication was found.
+Historical source pass for sharper local lemmas. The ETP blueprint source and the formal `Equation677.lean` file were checked for structural lemmas used in the dossier.
 
 ### Claim
 
@@ -269,15 +276,17 @@ satisfies the edge-product identity
 x\t = t*H_x(t).
 ```
 
-It is conjugate through `L_x` to `F_x(t)=x*(t*x)`. Thus a bad point is exactly a point for which these conjugate finite maps have no fixed point; any proof via this route must rule out nontrivial `H_x`-cycles compatible with `x\t=t*H_x(t)`.
+It is conjugate through `L_x` to `F_x(t)=x*(t*x)`. Thus a point where the fixed-point target fails is exactly a point for which these conjugate finite maps have no fixed point; any proof via this route must rule out nontrivial `H_x`-cycles compatible with `x\t=t*H_x(t)`.
 
-Third, the `L_x`-orbit period is never `2`, and a bad point has period at least `3`.
+Third, the `L_x`-orbit period is never `2`.  This was later strengthened in
+`literature.tex`: period `3` is impossible as well, so a point where the target has not yet been established has period at least
+`4`.
 
-### Counterexample strengthening
+### Right-collision strengthening
 
 In labeled-permutation notation `a*b=sigma(a)(b)`, the label map is injective. If `sigma(y)=sigma(z)`, then choosing any `x` and writing `e=y*x=z*x`, the two `E677` specializations with left factors `y,z` allow left cancellation by `z`, then `x`, then `e`, giving `y=z`.
 
-Thus a right collision at a bad column is not just a repeated value. It is a pair of distinct permutations agreeing at `x`, separating at `r`, and satisfying
+Thus a right collision at a failed fixed-point column is not just a repeated value. It is a pair of distinct permutations agreeing at `x`, separating at `r`, and satisfying
 
 ```text
 sigma(y)(r) != sigma(z)(r),
@@ -292,11 +301,11 @@ Rule out a nontrivial cycle of `H_x(t)=(x*t)*x` under the edge-product constrain
 x\t = t*H_x(t)
 ```
 
-or construct a counterexample cycle that extends to an injectively labeled permutation system satisfying the displayed collision code. This is now the sharp fixed-map version of the problem.
+or identify the exact compatible cycle inside an injectively labeled permutation system satisfying the displayed collision code. This is now the sharp fixed-map version of the route.
 
 ## Final audit pass
 
-### Status
+### Role
 
 Audited and cold-start ready. No mathematical retraction was found in the key identity, no-two-cycle corollary, fixed-map lemma, right-fiber splitter, or injective-label argument.
 
@@ -306,10 +315,10 @@ The polished dossier and `RAILROAD.md` no longer present the old collision equal
 
 ### Next lemma
 
-For the next agent, the priority missing lemma is:
+For a proof agent, the priority lemma in this historical pass was:
 
 ```text
 No nontrivial cycle of H_x(t)=(x*t)*x is compatible with x\t=t*H_x(t),
 ```
 
-or, failing that, construct such a cycle inside an injectively labeled permutation system satisfying the right-collision rectangles. This is the cleanest current frontier.
+or, failing that, identify the exact compatible cycle inside an injectively labeled permutation system satisfying the right-collision rectangles. The newer `literature.tex` period-four gate should be tried first.
