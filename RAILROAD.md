@@ -12,6 +12,8 @@ implication. Start from `literature.tex`; use this file as the short operating p
 - Work as if the proof is local and reachable: start from the trusted package and try to close one named gate. Use public metadata only for labels and source cross-checks.
 - The unrestricted case is calibration: a finite proof should visibly use finiteness.
 - Computation posture: keep computation proof-directed. Source lookup and document compilation are always fine; broader searches should wait for a new structural lemma that makes them informative.
+- Current search posture: order `10`, period `4` is computationally closed.  The active disproof frontier is order `10`, periods `5` and `6`, using complement `L_x`-cycle partitions plus fixed-cell splits.
+- The broad order `10` run has also closed periods `8` and `9` as `unsat`; periods `5`, `6`, and `7` timed out in that broad run.
 
 ## Notation
 
@@ -100,7 +102,7 @@ The trusted period-four data are
 x*a=q,   a*x=q,   a*r=x,   x*q=p,   p*a=q,   r notin {x,a,q}.
 ```
 
-Additional safe bookkeeping: with `s=p*x`, `h=r*q`, and `t=q*a`, one has
+Additional safe bookkeeping: with `s=p*x`, `h=r*q`, `t=q*a`, and `u=x*r`, one has
 
 ```text
 q*s=a,   (p*q)*p=s,   a*h=r.
@@ -109,12 +111,34 @@ q*s=a,   (p*q)*p=s,   a*h=r.
 In the external branch `r notin {x,a,q,p}` one also has
 
 ```text
-x*t=r,   t notin {x,a,q,p,r}.
+x*t=r,   t notin {x,a,q,p,r},   u notin {x,a,q,p,r}.
+```
+
+More generally, if `z^- -> z -> z^+` are consecutive points in any `L_x` cycle, then
+
+```text
+z*(z^+*x)=z^-.
+```
+
+Thus on the external component `t -> r -> u -> ...`, with `v=x*u`, one has
+
+```text
+r*(u*x)=t,   u*(v*x)=r.
 ```
 
 So an external period-four counterexample has at least two non-principal elements, `r`
-and `t=q*a`.  This supports the sound search symmetry break `r=4`, `t=5` after the
-principal orbit is labeled `x=0,a=1,q=2,p=3`.
+and `t=q*a`.  The next split is `u=t` (the external `L_x`-component has two-cycle
+`t -> r -> t`) versus `u` a third external point.  This supports the sound search
+symmetry breaks `r=4`, `t=5`, and in the third-point branch `u=6`, after the principal
+orbit is labeled `x=0,a=1,q=2,p=3`.
+
+Search status: order `10` period four is closed computationally.  The external side is
+closed by splitting the external `L_x` cycle containing `t`: size `2` is the two-cycle
+branch, and exact sizes `3`, `4`, `5`, and `6` are all `unsat`.  The `r=p` side is closed
+by splitting the `L_x` cycle partition on the six labels outside the principal orbit; the
+only first-pass timeout was partition `4,2`, and all ten values of `p*x` are `unsat` there.
+For stubborn residuals elsewhere, use `--fix-cell row:col:value`; comma form is accepted
+only if quoted in PowerShell.
 
 The immediate proof target is therefore:
 
@@ -123,6 +147,43 @@ If d=4, rule out r=p and rule out r outside {x,a,q,p}.
 ```
 
 The `r=a` and `r=q` exclusions use the key identity, not quotient-family reasoning.
+
+Audit warning: do not infer `p*a=r` in period four.  The trusted recurrence at `k=3`
+gives `p*a=q`; the recurrence at `k=2` gives `q*(p*x)=a`.  Confusing these is another
+index slip of the same flavor as the retired quotient-family route.
+
+### 0b. Order-Ten Period-Five And Period-Six Frontier
+
+For `d=5`, label
+
+```text
+x=0, a=x*x=1, b=x*a=2, q=x\p=3, p=x\x=4.
+```
+
+The current safe period-five package includes
+
+```text
+a*x=q,   x*q=p,   x*p=x,   p*a=q,
+g=q*x=a*((b*a)*b),   q*((a*q)*a)=x,   (a*q)*a=x*(g*q).
+```
+
+Under the bad-point package, `g notin {x,b}`.  Search status on order `10`, period `5`:
+complement partitions `3,1,1`, `2,2,1`, `2,1,1,1`, and `1,1,1,1,1` are `unsat`.
+The remaining larger partitions are being split by `g=q*x`: complement `5` has
+`g=0,1,2,3,4` `unsat`, where `g=4` closed after the single residual `a*q=8` was split
+by all ten `g*q` values, and `g=5` is down to `a*q=7,8,9` after `a*q=2,5,6` closed by
+`g*q`.  Complement `4,1` has every `g` value except `g=7` `unsat`,
+and `g=7` has only `a*q=5,8` residuals, now split by `g*q`.  Complement `3,2` has
+`g=0,1,2,3,4` `unsat`, where `g=4` is closed by splitting `a*q`; remaining residuals
+are `g=5/a*q=4,6`, `g=6/a*q=7,8`, and `g=7/a*q=2,5,7`, while `g=8,9` timed out in the
+parent split.
+
+For `d=6`, order `10` complement partitions `2,1,1` and `1,1,1,1` are `unsat`, and
+partition `3,1` is closed because all ten `q*x` values are `unsat`.  Partitions `4` and
+`2,2` have timed-out `q*x` residuals split by `a*q` using `--fix-cell 1:4:value`.
+Partition `4`, `q*x=4` is closed after the lone `a*q=2` residual was split by all ten
+`g*q` values; `q*x=5,6,7,8,9` are now under `a*q` splits.  Partition `2,2`, `q*x=2` is
+closed by all ten `a*q` values, leaving only parent residual `q*x=6` under an `a*q` split.
 
 ### 1. Unique Fixed-Point Witness
 
@@ -211,10 +272,11 @@ new lemmas, not as evidence by themselves.
 
 ## Work Order
 
-1. Attack the period-four gate first: under `d=4`, try to rule out `r=p`, then rule out `r` outside the principal orbit. Use only the orbit recurrence, transformed identity, key identity, and left cancellation.
-2. If the period-four gate stalls, return to the fixed-point target `q*x=x`. The sharp finite-map version is: before the target is proved at `x`, rule out fixed-point-free dynamics of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. Use positive models such as `u*v=2u-v` on `F_5` as calibration: global nontrivial `H_x`-cycles may exist when the fixed point already exists. If using finite-map lemmas from ETP Chapter 5, first derive a non-tautological self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division.
-3. If fixed-point work stalls, use the collision lift as a counting problem: find a natural small target set for the injective splitter `A_e(y)=y*e`, or derive collision propagation as a new lemma rather than assuming it.
-4. End unfinished attempts with exactly one next lemma.
+1. Continue mining the period-four computational closure for a proof, especially the `r=p` side and the external `L_x`-cycle recurrence. Use only the orbit recurrence, transformed identity, key identity, and left cancellation.
+2. For the active counterexample dig, finish order `10`, period `5` by splitting the residual `g=q*x` branches, then repeat the same discipline for period `6` by `q*x` and a second fixed cell when a slice times out.
+3. If the period-specific work stalls, return to the fixed-point target `q*x=x`. The sharp finite-map version is: before the target is proved at `x`, rule out fixed-point-free dynamics of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. Use positive models such as `u*v=2u-v` on `F_5` as calibration: global nontrivial `H_x`-cycles may exist when the fixed point already exists. If using finite-map lemmas from ETP Chapter 5, first derive a non-tautological self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division.
+4. If fixed-point work stalls, use the collision lift as a counting problem: find a natural small target set for the injective splitter `A_e(y)=y*e`, or derive collision propagation as a new lemma rather than assuming it.
+5. End unfinished attempts with exactly one next lemma.
 
 ## Writeup Protocol
 

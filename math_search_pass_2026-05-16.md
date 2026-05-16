@@ -103,7 +103,7 @@ Assume the bad witness has principal period `4`.  Write
 
 ```text
 x=c_0,  a=c_1=x*x,  q=c_2,  p=c_3=x\x,  r=q*x,
-s=p*x,  h=r*q,  t=q*a.
+s=p*x,  h=r*q,  t=q*a,  u=x*r.
 ```
 
 In every period-four branch one has
@@ -118,7 +118,22 @@ In the external branch `r notin {x,a,q,p}` one also has
 
 ```text
 x*t = r,
-t notin {x,a,q,p,r}.
+t notin {x,a,q,p,r},
+u notin {x,a,q,p,r}.
+```
+
+There is also a reusable local `L_x`-cycle recurrence.  If
+`z^- -> z -> z^+` are consecutive points under `L_x`, then
+
+```text
+z*(z^+*x)=z^-.
+```
+
+Hence on the external component `t -> r -> u -> ...`, with `v=x*u`,
+
+```text
+r*(u*x)=t,
+u*(v*x)=r.
 ```
 
 Consequently a period-four external counterexample can be relabeled so that
@@ -126,6 +141,10 @@ Consequently a period-four external counterexample can be relabeled so that
 ```text
 x=0, a=1, q=2, p=3, r=4, t=5.
 ```
+
+It then splits into `u=t`, where the external `L_x` component contains the two-cycle
+`t -> r -> t`, or a third-point branch `u notin {x,a,q,p,r,t}`, where one may relabel
+`u=6`.
 
 ### Argument
 
@@ -156,6 +175,11 @@ principal.  Since `L_q` is injective and `q*x=r`, the equality `t=q*a` cannot be
 unless `a=x`.  Thus `t` is a second external point, distinct from `r`.  Relabeling the
 external points puts `r=4` and `t=5` without losing counterexamples.
 
+The same row-injectivity argument gives `u=x*r notin {x,a,q,p,r}`: it cannot be
+principal because `L_x` maps the principal orbit to itself, and it cannot be `r` because
+`x*t=r` with `t!=r`.  Thus either `u=t` or `u` is a third external point, which can be
+relabeled as `6` in that branch.
+
 ## Implementation changes
 
 The searcher now adds the following default constraint families:
@@ -167,6 +191,11 @@ bad-witness normal form:     Lemma 1
 right-fiber splitter:        Lemma 2
 first-orbit symmetry break:  Lemma 3, when witness=0 and no period is fixed
 period-four external break:  Lemma 4, when branch=external
+external cycle split:        optional `x*r=t` versus third-point branch `x*r=6`
+external L_x cycle size:     optional exact size of the cycle containing `t=q*a`
+L_x complement cycles:       optional exact cycle partition outside the principal orbit
+fixed cells:                optional row*col=value branch splits for stubborn cases
+enum finite-sort backend:    avoids integer/array search overhead
 ```
 
 Each family can be disabled for debugging:
@@ -177,9 +206,18 @@ Each family can be disabled for debugging:
 --no-collision-splitter
 --no-symmetry-break-bad-orbit
 --no-symmetry-break-period4-external
+--period4-external-cycle two-cycle
+--period4-external-cycle third
+--period4-external-lx-cycle-size N
+--lx-complement-cycles 3,2,1
+--fix-cell row:col:value
 ```
 
+The comma form `row,col,value` is also accepted, but quote it in PowerShell.
+
 The command `--show-constraint-counts` prints the active constraint groups.
+The command `sweep --order N` checks all witness periods `4..N`, splitting period four
+into the `r=p` and external branches.
 
 ## Benchmarks and probes
 
@@ -197,6 +235,37 @@ Z3 timeout.
 | `order=7`, period `4`, branch `external`, after Lemma 4 symmetry | `unsat`, about `17 s` |
 | `order=7`, period `5` | `unsat`, about `96 s` in long run |
 | `order=7`, period `6` | `unsat` |
+| `order=7`, exhaustive enum sweep | all periods `unsat`, about `1.8 s` |
+| `order=8`, exhaustive enum sweep | all periods `unsat`, about `14.5 s` |
+| `order=8`, unrestricted enum search | `unsat`, about `35 s` |
+| `order=9`, period `4`, branch `external` | `unsat`, about `26.5 s` |
+| `order=9`, period `4`, branch `r=p` | `unsat`, about `34.7 s` |
+| `order=9`, period `4`, external two-cycle branch | `unsat` |
+| `order=9`, period `4`, external third-point branch | `unsat` |
+| `order=9`, period `4`, external exact sizes `3`, `4`, `5` | all `unsat` |
+| `order=9`, period `5` | `unsat`, about `149 s` |
+| `order=9`, period `6` | `unsat`, about `42 s` |
+| `order=9`, period `7` | `unsat`, about `18 s` |
+| `order=9`, period `8` | `unsat`, about `8 s` |
+| `order=10`, period `4`, external two-cycle branch | `unsat`, about `812 s` |
+| `order=10`, period `4`, broad external third-point branch | timeout at `900 s` |
+| `order=10`, period `4`, external exact sizes `3`, `4`, `5`, `6` | all `unsat`; closes external branch |
+| `order=10`, period `4`, branch `r=p`, complement partitions except `4,2` | all `unsat` |
+| `order=10`, period `4`, branch `r=p`, complement `4,2`, split by `p*x` | all ten values `unsat`; closes `r=p` |
+| `order=10`, period `5` | timeout at `900 s`; complement partition split active |
+| `order=10`, period `6` | timeout at `900 s`; complement partition split active |
+| `order=10`, period `7` | timeout at `900 s` in the broad run |
+| `order=10`, period `8` | `unsat`, about `701 s` in the broad run |
+| `order=10`, period `9` | `unsat`, about `458 s` in the broad run |
+| `order=10`, period `5`, complement `3,1,1`, `2,2,1`, `2,1,1,1`, `1,1,1,1,1` | all `unsat` |
+| `order=10`, period `5`, complement `5`, `4,1`, `3,2` | timeout at `300 s`; split by `g=q*x` active |
+| `order=10`, period `5`, complement `5`, `g=0,1,2,3,4` | all `unsat`; `g=4` closed after the lone `a*q=8` residual split by all ten `g*q` values; `g=5` now has only `a*q=7,8,9` residuals after `a*q=2,5,6` closed by `g*q`; `g=6` has `a*q=2,5,7,8,9` residuals; `g=7,8,9` timed out in the parent |
+| `order=10`, period `5`, complement `4,1`, `g=0,1,2,3,4,5,6,8,9` | all `unsat`; `g=7` has only `a*q=5,8` residuals, now split by `g*q` |
+| `order=10`, period `5`, complement `3,2`, `g=0,1,2,3,4` | all `unsat`, with `g=4` closed by the `a*q` split; `g=5` has only `a*q=4,6` residuals; `g=6` has only `a*q=7,8` residuals; `g=7` has only `a*q=2,5,7` residuals; `g=8,9` timed out in the parent |
+| `order=10`, period `6`, complement `2,1,1` and `1,1,1,1` | both `unsat` |
+| `order=10`, period `6`, complement `3,1`, split by `q*x` | all ten values `unsat`; closes this partition |
+| `order=10`, period `6`, complement `4`, split by `q*x` | `q*x=0,1,2,3` `unsat`; `q*x=4` closed after `a*q=2` was split by all ten `g*q` values; `q*x=5,6,7,8,9` timed out in the parent and are split by `a*q` |
+| `order=10`, period `6`, complement `2,2`, split by `q*x` | `q*x=0,1,3,4,5,7,8,9` `unsat`; `q*x=2` closed by all ten `a*q` values; `q*x=6` timed out in the parent and is split by `a*q` |
 
 The ablation says the mathematical bad-point constraints are currently the biggest win,
 and the transformed/key identities plus splitter constraints are both material.
@@ -218,17 +287,56 @@ splitter geometry.
 
 ## Research interpretation
 
-The period-four branch now looks strongly local on both sides: `r=p` is `unsat` through
-carrier size `7`, and the external branch also becomes `unsat` at size `7` once the two
-forced external points `r` and `t=q*a` are labeled.  This does not prove the period-four
-gate, but it sharpens the disproof search: any period-four external counterexample needs
-at least three external points beyond the principal orbit, or additional structure not
-visible in sizes up to `7`.
+The period-four branch now looks strongly local on both sides.  Both `r=p` and the
+external branch are `unsat` through carrier size `9`, and order `10` period four is also
+closed.  The external branch closes by splitting the external `L_x` cycle containing
+`t=q*a`: size `2` is the old two-cycle case, and exact sizes `3`, `4`, `5`, and `6` are
+all `unsat`.  The `r=p` branch closes by splitting the six-point complement cycle
+partition; all partitions are `unsat` except `4,2` at the first timeout, and the `4,2`
+residual is closed by the ten possible values of `p*x`.
+
+In the period-four `r=p` branch the simplified hand identities
+
+```text
+q*a=q,
+p*x=(q*q)*q=a*(q*q)
+```
+
+are now explicit solver constraints.  For period five, with
+`x=c0`, `a=c1`, `b=c2`, `q=c3`, `p=c4`, and `g=q*x`, the searcher also records
+
+```text
+g = a*((b*a)*b),
+q*((a*q)*a)=x,
+(a*q)*a=x*(g*q),
+g notin {x,b}.
+```
+
+Core mining suggests the period-five principal splits have different character.  On the
+smaller order `9` proxy, the `g=a` split has a compact core using only left rows, `E677`,
+transformed/key identities, the bad-column miss, the fixed cell, and the orbit/complement
+cycle facts.  The `g=q` split pulls in the fixed-map failures, right-fiber splitter, and
+the period-five derived identities.  This points to `g=a` as an orbit-local proof target
+and `g=q` as a finite splitter/fixed-map target.
 
 For period `5`, the order `7` case is now `unsat` but needed a longer run.  The next
 mathematical search target is to add cycle-structure constraints for the fixed-point-free
 maps `H_x` and `F_x`, or to derive one non-tautological finite-map identity involving
 `H_x`, `F_x`, `R_x`, `L_x`, `S`, or the gate map `t -> (t*x)*t`.
+
+For period six, with `x=c0`, `a=c1`, `b=c2`, `c=c3`, `q=c4`, `p=c5`, `h=c*x`, and
+`g=q*x`, the searcher now records the analogous first identities
+
+```text
+h = a*((b*a)*b),
+g = b*((c*b)*c),
+q*((a*q)*a)=x,
+(a*q)*a=x*(g*q),
+g != x.
+```
+
+This was added after the first broad period-six split, so active second-level period-six
+residuals using `a*q` are the first runs with this extra pruning.
 
 ## Next lemma
 
@@ -243,3 +351,10 @@ right-fiber splitter rectangles.
 
 This would move the period-four external branch from finite search pressure toward an
 actual orbit-counting contradiction.
+
+## Rejected shortcut
+
+Do not use `p*a=r` in period four.  The trusted period-four gate gives `p*a=q`.  The
+nearby true identities are `q*(p*x)=a` and `(p*q)*p=p*x`.  The false `p*a=r` comes from
+mixing up the recurrence indices and should be treated like the retired quotient-family
+slip.

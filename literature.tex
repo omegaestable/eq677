@@ -218,6 +218,28 @@ Since also \(c_k=x\op c_{k-1}\), left cancellation gives the recurrence.  Taking
 \(k=0\) gives \(c_{d-1}=x\op d_1\), so \(d_1=x\backslash c_{d-1}=c_{d-2}\).
 \end{proof}
 
+\begin{lemma}[Local \(L_x\)-cycle recurrence]\label{lem:lx-cycle-recurrence}
+Fix \(x\in M\).  Suppose
+\[
+   x\op z^-=z,
+   \qquad
+   x\op z=z^+ .
+\]
+Then
+\[
+   z\op(z^+\op x)=z^- .
+\]
+\end{lemma}
+
+\begin{proof}
+Apply \(\E{677}\) with parameter \(x\) and law variable \(z\):
+\[
+   z=x\op\bigl(z\op((x\op z)\op x)\bigr)
+    =x\op\bigl(z\op(z^+\op x)\bigr).
+\]
+Since also \(z=x\op z^-\), left cancellation by \(x\) gives the result.
+\end{proof}
+
 \begin{lemma}[Basic left-division identities]\label{lem:division-identities}
 For every \(k\),
 \[
@@ -441,18 +463,43 @@ Then
    \qquad
    a\op h=r .
 \]
+If \(r=p\), then
+\[
+   q\op a=q,
+   \qquad
+   s=(q\op q)\op q=a\op(q\op q).
+\]
 If moreover \(r\notin\{x,a,q,p\}\), and if
 \[
    t=q\op a,
+   \qquad
+   u=x\op r,
 \]
 then
 \[
    x\op t=r,
    \qquad
-   t\notin\{x,a,q,p,r\}.
+   t\notin\{x,a,q,p,r\},
+   \qquad
+   u\notin\{x,a,q,p,r\}.
+\]
+If \(e_0=t,e_1=r,e_2=u,
+\ldots,e_{\ell-1}\) is the \(L_x\)-cycle containing \(t\), ordered so that
+\(x\op e_i=e_{i+1}\) with indices modulo \(\ell\), then
+\[
+   e_i\op(e_{i+1}\op x)=e_{i-1}
+   \qquad(0\leq i<\ell).
+\]
+In particular, if \(v=x\op u\), then
+\[
+   r\op(u\op x)=t,
+   \qquad
+   u\op(v\op x)=r .
 \]
 Consequently a period-four external counterexample has at least two elements outside the
-principal \(L_x\)-orbit, namely \(r\) and \(t\).
+principal \(L_x\)-orbit, namely \(r\) and \(t\).  Moreover either \(u=t\), so the
+external \(L_x\)-component contains the two-cycle \(t\mapsto r\mapsto t\), or
+\(u\notin\{x,a,q,p,r,t\}\), giving a third external element.
 \end{lemma}
 
 \begin{proof}
@@ -479,6 +526,30 @@ Next apply \(\E{677}\) with law variable \(r\) and parameter \(a\).  Using
     =a\op h .
 \]
 
+If \(r=p\), then \(a\op p=x\).  Lemma~\ref{lem:transformed}, applied with
+\(y=a\) and \(z=p\), gives
+\[
+   p=(a\op p)\op((a\op(a\op p))\op a)
+   =x\op((a\op x)\op a)
+   =x\op(q\op a).
+\]
+Since also \(p=x\op q\), left cancellation by \(x\) gives \(q\op a=q\).
+Now Lemma~\ref{lem:transformed}, applied with \(y=q\) and \(z=a\), gives
+\[
+   a=(q\op a)\op((q\op(q\op a))\op q)
+   =q\op((q\op q)\op q).
+\]
+Comparing with \(q\op s=a\) and left-cancelling by \(q\), one obtains
+\(s=(q\op q)\op q\).  Finally Lemma~\ref{lem:key-identity}, again with
+\(y=q\) and \(z=a\), gives
+\[
+   (q\op q)\op q
+   =a\op(((q\op a)\op a)\op(q\op a))
+   =a\op(q\op q),
+\]
+where the last equality uses \(q\op a=q\).  This proves the displayed identities
+in the branch \(r=p\).
+
 Finally assume \(r\notin\{x,a,q,p\}\).  Lemma~\ref{lem:transformed}, applied with
 \(y=a\) and \(z=r\), gives
 \[
@@ -491,7 +562,157 @@ Since \(L_x\) permutes the principal orbit cyclically, no element of
 \(\{x,a,q,p\}\) can be mapped by \(L_x\) to the external element \(r\).  Hence
 \(t\notin\{x,a,q,p\}\).  Also \(t\neq r\), for otherwise
 \(q\op a=q\op x\), and left cancellation by \(q\) would give \(a=x\), contrary to
-the period-four orbit.  This proves the claim.
+the period-four orbit.
+
+For the same reason, \(u=x\op r\) cannot lie in \(\{x,a,q,p\}\), because
+\(L_x\) maps those four elements cyclically within the principal orbit.  Also \(u\neq r\),
+because \(x\op t=r\) and left cancellation by \(x\) would then give \(r=t\).  Thus
+\(u\notin\{x,a,q,p,r\}\).
+
+The recurrence along the external \(L_x\)-cycle is Lemma~\ref{lem:lx-cycle-recurrence}
+applied successively to the triples \(e_{i-1},e_i,e_{i+1}\).  The two displayed
+specializations are the cases \(e_i=r\) and \(e_i=u\).  If \(u\neq t\), this is the
+promised third external element; otherwise the external \(L_x\)-component contains the
+displayed two-cycle.  This proves the claim.
+\end{proof}
+
+\begin{lemma}[Period-five first identities]\label{lem:period-five-first-identities}
+Assume that the \(L_x\)-orbit of \(x\) has period \(5\).  Write
+\[
+   a=c_1,
+   \qquad
+   b=c_2,
+   \qquad
+   q=c_3=x\backslash p,
+   \qquad
+   p=c_4=x\backslash x,
+   \qquad
+   g=q\op x .
+\]
+Then
+\[
+   a\op x=q,
+   \qquad
+   x\op q=p,
+   \qquad
+   x\op p=x,
+   \qquad
+   p\op a=q,
+\]
+and
+\[
+   g=a\op((b\op a)\op b),
+   \qquad
+   q\op((a\op q)\op a)=x,
+   \qquad
+   (a\op q)\op a=x\op(g\op q).
+\]
+If moreover \(\EqAt{\E{255}}{x}\) fails, then \(g\notin\{x,b\}\).
+\end{lemma}
+
+\begin{proof}
+The first displayed line follows from the orbit definition, from \(d_1=c_{d-2}=c_3\),
+and from the orbit recurrence at \(k=4\).  Lemma~\ref{lem:key-identity}, applied with
+\(y=x\) and \(z=a\), gives
+\[
+   (x\op(x\op a))\op x
+   =a\op(((x\op a)\op a)\op(x\op a)).
+\]
+Using \(x\op a=b\) and \(x\op b=q\), this is exactly
+\[
+   g=a\op((b\op a)\op b).
+\]
+Next Lemma~\ref{lem:transformed}, applied with \(y=a\) and \(z=x\), gives
+\[
+   x=(a\op x)\op((a\op(a\op x))\op a)=q\op((a\op q)\op a).
+\]
+Lemma~\ref{lem:key-identity}, again with \(y=a\) and \(z=x\), gives
+\[
+   (a\op(a\op x))\op a=x\op(((a\op x)\op x)\op(a\op x))=x\op(g\op q),
+\]
+which proves the final displayed identity.  If the target fails, then
+\(g=q\op x\neq x\).  If \(g=b\), then
+\[
+   H_x(b)=(x\op b)\op x=q\op x=b,
+\]
+contradicting Lemma~\ref{lem:fixed-map}, which says that a fixed point of \(H_x\) is
+equivalent to \(\EqAt{\E{255}}{x}\).  Hence \(g\notin\{x,b\}\).
+\end{proof}
+
+\begin{lemma}[Period-six first identities]\label{lem:period-six-first-identities}
+Assume that the \(L_x\)-orbit of \(x\) has period \(6\).  Write
+\[
+   a=c_1,
+   \qquad
+   b=c_2,
+   \qquad
+   c=c_3,
+   \qquad
+   q=c_4=x\backslash p,
+   \qquad
+   p=c_5=x\backslash x,
+\]
+and set
+\[
+   h=c\op x,
+   \qquad
+   g=q\op x .
+\]
+Then
+\[
+   a\op x=q,
+   \qquad
+   x\op q=p,
+   \qquad
+   x\op p=x,
+   \qquad
+   p\op a=q,
+\]
+and
+\[
+   h=a\op((b\op a)\op b),
+   \qquad
+   g=b\op((c\op b)\op c),
+   \qquad
+   q\op((a\op q)\op a)=x,
+   \qquad
+   (a\op q)\op a=x\op(g\op q).
+\]
+If moreover \(\EqAt{\E{255}}{x}\) fails, then \(g\neq x\).
+\end{lemma}
+
+\begin{proof}
+The first displayed line follows from the orbit definition, from \(d_1=c_{d-2}=c_4\),
+and from the orbit recurrence at \(k=5\).  Lemma~\ref{lem:key-identity}, applied with
+\(y=x\) and \(z=a\), gives
+\[
+   (x\op(x\op a))\op x
+   =a\op(((x\op a)\op a)\op(x\op a)).
+\]
+Using \(x\op a=b\) and \(x\op b=c\), this becomes
+\[
+   h=a\op((b\op a)\op b).
+\]
+The same identity with \(y=x\) and \(z=b\) gives
+\[
+   (x\op(x\op b))\op x
+   =b\op(((x\op b)\op b)\op(x\op b)),
+\]
+and hence, using \(x\op b=c\) and \(x\op c=q\),
+\[
+   g=b\op((c\op b)\op c).
+\]
+Next Lemma~\ref{lem:transformed}, applied with \(y=a\) and \(z=x\), gives
+\[
+   x=(a\op x)\op((a\op(a\op x))\op a)=q\op((a\op q)\op a).
+\]
+Lemma~\ref{lem:key-identity}, again with \(y=a\) and \(z=x\), gives
+\[
+   (a\op(a\op x))\op a=x\op(((a\op x)\op x)\op(a\op x))=x\op(g\op q),
+\]
+which proves the final displayed identity.  Finally, \(g=q\op x=x\) is one of the
+equivalent fixed-point targets in Proposition~\ref{prop:unique-witness}, so it is
+impossible when \(\EqAt{\E{255}}{x}\) fails.
 \end{proof}
 
 \section{The route graph}

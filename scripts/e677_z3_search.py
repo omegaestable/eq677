@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -139,6 +140,10 @@ class SearchConfig:
     witness: int
     period: int | None
     branch: str
+    period4_external_cycle: str
+    period4_external_lx_cycle_size: int | None
+    lx_complement_cycles: tuple[int, ...] | None
+    fixed_cells: tuple[tuple[int, int, int], ...]
     timeout_ms: int
     require_left_permutations: bool
     require_label_injective: bool
@@ -199,6 +204,12 @@ class E677Search:
         for row in self.cells:
             for cell in row:
                 self.add(cell >= 0, cell < self.order, group="domain")
+
+    def add_fixed_cell_constraints(self) -> None:
+        for row, col, value in self.config.fixed_cells:
+            if row >= self.order or col >= self.order or value >= self.order:
+                raise ValueError("fixed cell entries must be less than --order")
+            self.add(self.mul(row, col) == self.as_expr(value), group="fixed_cells")
 
     def add_left_permutation_constraints(self) -> None:
         for row in range(self.order):
@@ -281,6 +292,8 @@ class E677Search:
     def add_period_constraints(self) -> None:
         period = self.config.period
         if period is None:
+            if self.config.lx_complement_cycles is not None:
+                raise ValueError("L_x complement cycle constraints require --period")
             return
         if self.config.witness != 0:
             raise ValueError("period symmetry breaking currently requires --witness 0")
@@ -300,11 +313,37 @@ class E677Search:
             c_next = (k + 1) % period
             self.add(self.mul(c_k, self.mul(c_next, 0)) == self.as_expr(c_prev), group="orbit_facts")
 
+    def add_lx_complement_cycle_constraints(self) -> None:
+        cycles = self.config.lx_complement_cycles
+        if cycles is None:
+            return
+        period = self.config.period
+        if period is None:
+            raise ValueError("L_x complement cycle constraints require --period")
+        remaining = self.order - period
+        if sum(cycles) != remaining:
+            raise ValueError("L_x complement cycle sizes must sum to order - period")
+        label = period
+        for size in cycles:
+            if size == 1:
+                self.add(self.mul(0, label) == self.as_expr(label), group="lx_complement_cycles")
+            else:
+                for offset in range(size - 1):
+                    self.add(self.mul(0, label + offset) == self.as_expr(label + offset + 1), group="lx_complement_cycles")
+                self.add(self.mul(0, label + size - 1) == self.as_expr(label), group="lx_complement_cycles")
+            label += size
+
     def add_period_four_gate(self) -> None:
         if self.config.period != 4:
             if self.config.branch != "any":
                 raise ValueError("period-four branch constraints require --period 4")
+            if self.config.period4_external_cycle != "any":
+                raise ValueError("period-four external cycle constraints require --period 4 --branch external")
+            if self.config.period4_external_lx_cycle_size is not None:
+                raise ValueError("period-four external L_x cycle constraints require --period 4 --branch external")
             return
+        if self.config.period4_external_lx_cycle_size is not None and self.config.branch != "external":
+            raise ValueError("period-four external L_x cycle constraints require --branch external")
         x, a, q, p = 0, 1, 2, 3
         r = self.mul(q, x)
         s = self.mul(p, x)
@@ -320,17 +359,114 @@ class E677Search:
         self.add(self.mul(self.mul(p, q), p) == s, group="period4_derived")
         self.add(self.mul(a, h) == r, group="period4_derived")
         if self.config.branch == "r=p":
+            if self.config.period4_external_cycle != "any":
+                raise ValueError("period-four external cycle constraints require --branch external")
             self.add(r == self.as_expr(p), group="period4_branch_r_eq_p")
             self.add(qa == self.as_expr(q), group="period4_branch_r_eq_p_derived")
+            qq = self.mul(q, q)
+            self.add(s == self.mul(qq, q), s == self.mul(a, qq), group="period4_branch_r_eq_p_derived")
         elif self.config.branch == "external":
             self.add(r != self.as_expr(p), group="period4_branch_external")
             self.add(qa != r, group="period4_branch_external_derived")
             self.add(qa != self.as_expr(x), qa != self.as_expr(a), qa != self.as_expr(q), qa != self.as_expr(p), group="period4_branch_external_derived")
             self.add(self.mul(x, qa) == r, group="period4_branch_external_derived")
+            xr = self.mul(x, r)
+            x_xr = self.mul(x, xr)
+            self.add(
+                xr != self.as_expr(x),
+                xr != self.as_expr(a),
+                xr != self.as_expr(q),
+                xr != self.as_expr(p),
+                xr != r,
+                group="period4_branch_external_derived",
+            )
+            self.add(s != self.as_expr(x), s != self.as_expr(a), s != self.as_expr(q), group="period4_branch_external_derived")
+            self.add(h != self.as_expr(x), h != self.as_expr(p), h != r, group="period4_branch_external_derived")
+            self.add(self.mul(r, self.mul(xr, x)) == qa, group="period4_external_recurrence")
+            self.add(self.mul(xr, self.mul(x_xr, x)) == r, group="period4_external_recurrence")
             if self.config.symmetry_break_period4_external and self.order >= 5:
                 self.add(r == self.as_expr(4), group="period4_external_symmetry_break")
                 if self.order >= 6:
                     self.add(qa == self.as_expr(5), group="period4_external_symmetry_break")
+            cycle_size = self.config.period4_external_lx_cycle_size
+            if cycle_size is not None:
+                if cycle_size < 2:
+                    raise ValueError("period-four external L_x cycle size must be at least 2")
+                if cycle_size > self.order - 4:
+                    raise ValueError("period-four external L_x cycle size is too large for the carrier")
+                if self.config.period4_external_cycle == "two-cycle" and cycle_size != 2:
+                    raise ValueError("--period4-external-cycle two-cycle requires --period4-external-lx-cycle-size 2")
+                if self.config.period4_external_cycle == "third" and cycle_size == 2:
+                    raise ValueError("--period4-external-cycle third requires external L_x cycle size at least 3")
+                self.add_period_four_external_lx_cycle(qa, r, xr, cycle_size)
+            elif self.config.period4_external_cycle == "two-cycle":
+                self.add(xr == qa, group="period4_external_two_cycle")
+            elif self.config.period4_external_cycle == "third":
+                self.add(xr != qa, group="period4_external_third_point")
+                if self.config.symmetry_break_period4_external and self.order >= 7:
+                    self.add(xr == self.as_expr(6), group="period4_external_third_point")
+
+    def add_period_four_external_lx_cycle(
+        self,
+        t: z3.ExprRef,
+        r: z3.ExprRef,
+        u: z3.ExprRef,
+        cycle_size: int,
+    ) -> None:
+        x = 0
+        nodes = [t, r]
+        if cycle_size == 2:
+            self.add(u == t, group="period4_external_two_cycle")
+        else:
+            nodes.append(u)
+            self.add(u != t, group="period4_external_third_point")
+            if self.config.symmetry_break_period4_external and self.order >= 7:
+                self.add(u == self.as_expr(6), group="period4_external_third_point")
+            for offset in range(cycle_size - 3):
+                next_node = self.mul(x, nodes[-1])
+                nodes.append(next_node)
+                if self.config.symmetry_break_period4_external:
+                    self.add(next_node == self.as_expr(7 + offset), group="period4_external_lx_cycle_symmetry_break")
+            self.add(z3.Distinct(nodes), group="period4_external_lx_cycle_size")
+            self.add(self.mul(x, nodes[-1]) == t, group="period4_external_lx_cycle_size")
+        for index, node in enumerate(nodes):
+            previous_node = nodes[(index - 1) % cycle_size]
+            next_node = nodes[(index + 1) % cycle_size]
+            self.add(self.mul(node, self.mul(next_node, x)) == previous_node, group="period4_external_lx_cycle_recurrence")
+
+    def add_period_five_gate(self) -> None:
+        if self.config.period != 5:
+            return
+        x, a, b, q, p = 0, 1, 2, 3, 4
+        g = self.mul(q, x)
+        aq = self.mul(a, q)
+        self.add(self.mul(a, x) == self.as_expr(q), group="period5_gate")
+        self.add(self.mul(x, q) == self.as_expr(p), group="period5_gate")
+        self.add(self.mul(x, p) == self.as_expr(x), group="period5_gate")
+        self.add(self.mul(p, a) == self.as_expr(q), group="period5_gate")
+        self.add(g == self.mul(a, self.mul(self.mul(b, a), b)), group="period5_derived")
+        self.add(self.mul(q, self.mul(aq, a)) == self.as_expr(x), group="period5_derived")
+        self.add(self.mul(aq, a) == self.mul(x, self.mul(g, q)), group="period5_derived")
+        self.add(g != self.as_expr(x), group="period5_derived")
+        if self.config.add_bad_point_lemmas:
+            self.add(g != self.as_expr(b), group="period5_derived_bad_point")
+
+    def add_period_six_gate(self) -> None:
+        if self.config.period != 6:
+            return
+        x, a, b, c, q, p = 0, 1, 2, 3, 4, 5
+        h = self.mul(c, x)
+        g = self.mul(q, x)
+        aq = self.mul(a, q)
+        self.add(self.mul(a, x) == self.as_expr(q), group="period6_gate")
+        self.add(self.mul(x, q) == self.as_expr(p), group="period6_gate")
+        self.add(self.mul(x, p) == self.as_expr(x), group="period6_gate")
+        self.add(self.mul(p, a) == self.as_expr(q), group="period6_gate")
+        self.add(h == self.mul(a, self.mul(self.mul(b, a), b)), group="period6_derived")
+        self.add(g == self.mul(b, self.mul(self.mul(c, b), c)), group="period6_derived")
+        self.add(self.mul(q, self.mul(aq, a)) == self.as_expr(x), group="period6_derived")
+        self.add(self.mul(aq, a) == self.mul(x, self.mul(g, q)), group="period6_derived")
+        self.add(g != self.as_expr(x), group="period6_derived")
 
     def build(self) -> None:
         self.add_domain_constraints()
@@ -346,8 +482,12 @@ class E677Search:
             self.add_bad_point_lemmas()
         if self.config.add_collision_splitter:
             self.add_collision_splitter_constraints()
+        self.add_fixed_cell_constraints()
         self.add_period_constraints()
+        self.add_lx_complement_cycle_constraints()
         self.add_period_four_gate()
+        self.add_period_five_gate()
+        self.add_period_six_gate()
 
     def extract_table(self, model: z3.ModelRef) -> Table:
         return [
@@ -383,6 +523,8 @@ class E677Search:
 
 
 class E677EnumSearch(E677Search):
+    sort_counter = 0
+
     def __init__(self, config: SearchConfig):
         self.config = config
         self.order = config.order
@@ -391,8 +533,10 @@ class E677EnumSearch(E677Search):
             self.solver.set(timeout=config.timeout_ms)
         self.constraint_counts: Counter[str] = Counter()
         self.group_literals: dict[str, z3.BoolRef] = {}
-        self.sort, self.elements = z3.EnumSort("M", [f"e{index}" for index in range(self.order)])
-        self.op = z3.Function("op", self.sort, self.sort, self.sort)
+        E677EnumSearch.sort_counter += 1
+        sort_name = f"M_{E677EnumSearch.sort_counter}_{self.order}"
+        self.sort, self.elements = z3.EnumSort(sort_name, [f"e{E677EnumSearch.sort_counter}_{index}" for index in range(self.order)])
+        self.op = z3.Function(f"op_{E677EnumSearch.sort_counter}", self.sort, self.sort, self.sort)
 
     def add_domain_constraints(self) -> None:
         return
@@ -420,32 +564,6 @@ class E677EnumSearch(E677Search):
             table.append(values)
         return table
 
-    def run(self) -> tuple[z3.CheckSatResult, Table | None]:
-        self.build()
-        if self.config.track_groups:
-            result = self.solver.check(*self.group_literals.values())
-        else:
-            result = self.solver.check()
-        if result != z3.sat:
-            return result, None
-        return result, self.extract_table(self.solver.model())
-
-    def group_unsat_core(self) -> list[str]:
-        literal_to_group = {literal: group for group, literal in self.group_literals.items()}
-        return [literal_to_group[literal] for literal in self.solver.unsat_core()]
-
-    def minimized_group_unsat_core(self) -> list[str]:
-        groups = self.group_unsat_core()
-        kept = list(groups)
-        if self.config.core_check_timeout_ms > 0:
-            self.solver.set(timeout=self.config.core_check_timeout_ms)
-        for group in groups:
-            trial = [candidate for candidate in kept if candidate != group]
-            assumptions = [self.group_literals[candidate] for candidate in trial]
-            if self.solver.check(*assumptions) == z3.unsat:
-                kept = trial
-        return kept
-
 
 def print_validation(table: Table, witness: int) -> None:
     ok, errors = check_table(table)
@@ -461,28 +579,8 @@ def print_validation(table: Table, witness: int) -> None:
 
 
 def search_command(args: argparse.Namespace) -> int:
-    config = SearchConfig(
-        backend=args.backend,
-        order=args.order,
-        witness=args.witness,
-        period=args.period,
-        branch=args.branch,
-        timeout_ms=args.timeout_ms,
-        require_left_permutations=not args.no_left_permutations,
-        require_label_injective=not args.no_label_injective,
-        add_orbit_facts=not args.no_orbit_facts,
-        add_derived_identities=not args.no_derived_identities,
-        add_bad_point_lemmas=not args.no_bad_point_lemmas,
-        add_collision_splitter=not args.no_collision_splitter,
-        symmetry_break_bad_orbit=not args.no_symmetry_break_bad_orbit,
-        symmetry_break_period4_external=not args.no_symmetry_break_period4_external,
-        show_constraint_counts=args.show_constraint_counts,
-        track_groups=args.track_groups,
-        minimize_core=args.minimize_core,
-        core_check_timeout_ms=args.core_check_timeout_ms,
-    )
-    search_class = E677EnumSearch if config.backend == "enum" else E677Search
-    search = search_class(config)
+    config = search_config_from_args(args, period=args.period, branch=args.branch)
+    search = make_search(config)
     result, table = search.run()
     print(f"result: {result}")
     if config.show_constraint_counts:
@@ -503,6 +601,64 @@ def search_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def search_config_from_args(
+    args: argparse.Namespace,
+    period: int | None,
+    branch: str,
+    period4_external_cycle: str | None = None,
+) -> SearchConfig:
+    return SearchConfig(
+        backend=args.backend,
+        order=args.order,
+        witness=args.witness,
+        period=period,
+        branch=branch,
+        period4_external_cycle=period4_external_cycle or args.period4_external_cycle,
+        period4_external_lx_cycle_size=args.period4_external_lx_cycle_size,
+        lx_complement_cycles=args.lx_complement_cycles,
+        fixed_cells=tuple(args.fix_cell or ()),
+        timeout_ms=args.timeout_ms,
+        require_left_permutations=not args.no_left_permutations,
+        require_label_injective=not args.no_label_injective,
+        add_orbit_facts=not args.no_orbit_facts,
+        add_derived_identities=not args.no_derived_identities,
+        add_bad_point_lemmas=not args.no_bad_point_lemmas,
+        add_collision_splitter=not args.no_collision_splitter,
+        symmetry_break_bad_orbit=not args.no_symmetry_break_bad_orbit,
+        symmetry_break_period4_external=not args.no_symmetry_break_period4_external,
+        show_constraint_counts=args.show_constraint_counts,
+        track_groups=args.track_groups,
+        minimize_core=args.minimize_core,
+        core_check_timeout_ms=args.core_check_timeout_ms,
+    )
+
+
+def make_search(config: SearchConfig) -> E677Search:
+    search_class = E677EnumSearch if config.backend == "enum" else E677Search
+    return search_class(config)
+
+
+def sweep_command(args: argparse.Namespace) -> int:
+    any_unknown = False
+    for period in range(args.start_period, args.order + 1):
+        branches = ["r=p", "external"] if period == 4 else ["any"]
+        for branch in branches:
+            label = f"period={period}" if branch == "any" else f"period={period}, branch={branch}"
+            print(f"== {label} ==")
+            cycle = args.period4_external_cycle if branch == "external" else "any"
+            config = search_config_from_args(args, period=period, branch=branch, period4_external_cycle=cycle)
+            search = make_search(config)
+            result, table = search.run()
+            print(f"result: {result}")
+            if table is not None:
+                print_validation(table, args.witness)
+                return 1
+            if result == z3.unknown:
+                any_unknown = True
+                print(f"reason: {search.solver.reason_unknown()}")
+    return 2 if any_unknown else 0
+
+
 def calibrate_linear_command(args: argparse.Namespace) -> int:
     table = linear_table(args.prime, args.alpha, args.beta, args.const)
     print_validation(table, args.witness)
@@ -514,6 +670,29 @@ def positive_int(value: str) -> int:
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be positive")
     return parsed
+
+
+def positive_int_tuple(value: str) -> tuple[int, ...]:
+    try:
+        parsed = tuple(positive_int(part.strip()) for part in value.split(",") if part.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a comma-separated list of positive integers") from exc
+    if not parsed:
+        raise argparse.ArgumentTypeError("must include at least one cycle size")
+    return parsed
+
+
+def fixed_cell(value: str) -> tuple[int, int, int]:
+    parts = re.split(r"[,:]", value)
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("must have the form row,col,value or row:col:value")
+    try:
+        row, col, cell_value = (int(part.strip()) for part in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("row, col, and value must be integers") from exc
+    if row < 0 or col < 0 or cell_value < 0:
+        raise argparse.ArgumentTypeError("row, col, and value must be nonnegative")
+    return row, col, cell_value
 
 
 def add_common_summary_args(parser: argparse.ArgumentParser) -> None:
@@ -534,6 +713,28 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["any", "r=p", "external"],
         default="any",
         help="period-four gate branch to enforce",
+    )
+    search.add_argument(
+        "--period4-external-cycle",
+        choices=["any", "two-cycle", "third"],
+        default="any",
+        help="split the period-four external L_x component by whether x*r=t=q*a",
+    )
+    search.add_argument(
+        "--period4-external-lx-cycle-size",
+        type=positive_int,
+        help="fix the exact size of the external L_x cycle containing t=q*a in the period-four external branch",
+    )
+    search.add_argument(
+        "--lx-complement-cycles",
+        type=positive_int_tuple,
+        help="fix the cycle sizes of L_x on labels outside the principal witness orbit, for example 3,2,1",
+    )
+    search.add_argument(
+        "--fix-cell",
+        action="append",
+        type=fixed_cell,
+        help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
     )
     search.add_argument("--timeout-ms", type=int, default=30000, help="Z3 timeout in milliseconds; 0 means none")
     search.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
@@ -562,6 +763,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="per-check timeout for greedy core minimization; 0 means no separate limit",
     )
     search.set_defaults(func=search_command)
+
+    sweep = subparsers.add_parser("sweep", help="exhaustively check all witness periods for an order")
+    sweep.add_argument("--backend", choices=["enum", "array"], default="enum", help="Z3 encoding backend")
+    sweep.add_argument("--order", type=positive_int, required=True, help="finite carrier size")
+    sweep.add_argument("--start-period", type=positive_int, default=4, help="first witness period to check")
+    add_common_summary_args(sweep)
+    sweep.add_argument("--timeout-ms", type=int, default=30000, help="Z3 timeout per case in milliseconds; 0 means none")
+    sweep.add_argument(
+        "--period4-external-cycle",
+        choices=["any", "two-cycle", "third"],
+        default="any",
+        help="optional split for the period-four external L_x component",
+    )
+    sweep.add_argument(
+        "--period4-external-lx-cycle-size",
+        type=positive_int,
+        help="fix the exact size of the external L_x cycle containing t=q*a in the period-four external branch",
+    )
+    sweep.add_argument(
+        "--lx-complement-cycles",
+        type=positive_int_tuple,
+        help="fix the cycle sizes of L_x on labels outside the principal witness orbit, for example 3,2,1",
+    )
+    sweep.add_argument(
+        "--fix-cell",
+        action="append",
+        type=fixed_cell,
+        help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
+    )
+    sweep.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
+    sweep.add_argument("--no-label-injective", action="store_true", help="do not add row-label injectivity constraints")
+    sweep.add_argument("--no-orbit-facts", action="store_true", help="do not add trusted orbit recurrence facts")
+    sweep.add_argument("--no-derived-identities", action="store_true", help="do not add transformed/key identity constraints")
+    sweep.add_argument("--no-bad-point-lemmas", action="store_true", help="do not add bad-witness consequences")
+    sweep.add_argument("--no-collision-splitter", action="store_true", help="do not add right-fiber splitter constraints")
+    sweep.add_argument(
+        "--no-symmetry-break-bad-orbit",
+        action="store_true",
+        help="do not relabel the first bad L_x orbit points to 0,1,2,3 when possible",
+    )
+    sweep.add_argument(
+        "--no-symmetry-break-period4-external",
+        action="store_true",
+        help="do not relabel period-four external branch points r=q*x and q*a",
+    )
+    sweep.add_argument("--show-constraint-counts", action="store_true", help="print added constraint groups")
+    sweep.add_argument("--track-groups", action="store_true", help="use group assumptions and print an UNSAT core")
+    sweep.add_argument("--minimize-core", action="store_true", help="greedily minimize the group UNSAT core")
+    sweep.add_argument(
+        "--core-check-timeout-ms",
+        type=int,
+        default=5000,
+        help="per-check timeout for greedy core minimization; 0 means no separate limit",
+    )
+    sweep.set_defaults(func=sweep_command)
 
     calibrate = subparsers.add_parser("calibrate-linear", help="verify a linear model table")
     calibrate.add_argument("--prime", type=positive_int, default=5, help="field size, expected prime")
