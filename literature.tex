@@ -108,6 +108,33 @@ Thus \(L_a\) is surjective.  Since \(M\) is finite, \(L_a\) is bijective, and th
 preimage formula is exactly the formula for \(a\backslash b\).
 \end{proof}
 
+\begin{lemma}[Division calculus]\label{lem:division-calculus}
+Let \(M\) be a finite magma satisfying \(\E{677}\).  Then
+\[
+   a\backslash(a\backslash b)=(a\backslash b)\op(b\op a),
+   \qquad
+   b\backslash(a\backslash b)=(a\op b)\op a
+\]
+for all \(a,b\in M\).
+\end{lemma}
+
+\begin{proof}
+For the first identity, Proposition \ref{prop:left-division}, applied to
+\(a\backslash b\) in place of \(b\), gives
+\[
+   a\backslash(a\backslash b)
+   =(a\backslash b)\op((a\op(a\backslash b))\op a)
+   =(a\backslash b)\op(b\op a),
+\]
+because \(a\op(a\backslash b)=b\).  For the second identity, Proposition
+\ref{prop:left-division} gives
+\[
+   b\op((a\op b)\op a)=a\backslash b,
+\]
+so uniqueness of left division by \(b\) gives
+\(b\backslash(a\backslash b)=(a\op b)\op a\).
+\end{proof}
+
 The ETP chapter also records several strategic facts that are used here only as external
 input.  The unrestricted implication \(\E{677}\not\models\E{255}\) is witnessed by the
 free \(\E{677}\)-magma \cite[Section 13.2]{ETP677}.  Linear models satisfying
@@ -214,9 +241,8 @@ recurrence in Lemma \ref{lem:orbit-recurrence}.  Since \(x\op c_{d-1}=c_d=x\), o
 \[
    q=x\backslash p=x\backslash c_{d-1}=c_{d-2}=d_1.
 \]
-Also \(d_1=c_1\op x=(x\op x)\op x\).  Finally, applying the general identity
-\(a\backslash(a\backslash b)=(a\backslash b)\op(b\op a)\), which follows immediately
-from Proposition \ref{prop:left-division}, with \(a=b=x\), gives
+Also \(d_1=c_1\op x=(x\op x)\op x\).  Finally, Lemma
+\ref{lem:division-calculus}, applied with \(a=x\) and \(b=x\), gives
 \[
    x\backslash p=p\op(x\op x).
 \]
@@ -348,6 +374,8 @@ Since \(p=x\backslash x\), injectivity of \(L_x\) gives
 \[
    x\op((q\op x)\op q)=x
    \quad\Longleftrightarrow\quad
+   x\op((q\op x)\op q)=x\op p
+   \quad\Longleftrightarrow\quad
    (q\op x)\op q=p.
 \]
 Together with (1)\(\Longleftrightarrow\)(2), this proves the claim.
@@ -388,6 +416,14 @@ for every \(t\in M\), and
 \]
 Consequently \(F_x\) and \(H_x\) have the same finite cycle structure.  Moreover
 \(\EqAt{\E{255}}{x}\) is equivalent to either of these maps having a fixed point.
+When fixed points exist, they are unique: the fixed point of \(F_x\) is
+\[
+   x\backslash q,
+\]
+and the fixed point of \(H_x\) is
+\[
+   x\backslash(x\backslash q).
+\]
 Thus, at a counterexample point \(x\), both maps are fixed-point-free and every
 cycle of either map has length at least \(2\).
 \end{lemma}
@@ -401,7 +437,9 @@ This is exactly (E).  The conjugacy identity is immediate:
 \[
    F_x(L_x(t))=x\op((x\op t)\op x)=L_x(H_x(t)).
 \]
-Since \(L_x\) is bijective, (Conj) gives the same cycle structure.
+Since \(L_x\) is bijective by Proposition \ref{prop:left-division}, (Conj) gives the
+same cycle structure: \(L_x\) carries each \(H_x\)-cycle to an \(F_x\)-cycle, and
+\(L_x^{-1}\) carries each \(F_x\)-cycle back to an \(H_x\)-cycle.
 
 If \(F_x(z)=z\), then
 \[
@@ -413,13 +451,20 @@ The left-inverse formula for \(L_x\), applied to \(z\), also gives
 \]
 Left cancellation by \(x\), then by \(z\), yields \((x\op z)\op x=x\).  Hence a
 right fixed-point witness over \(x\) exists, and Proposition \ref{prop:unique-witness}
-gives \(\EqAt{\E{255}}{x}\).  Conversely, if \(u\op x=x\), set
+gives \(\EqAt{\E{255}}{x}\).  More precisely, the same proposition gives
+\[
+   x\op z=q,
+\]
+so any fixed point of \(F_x\) must be \(z=x\backslash q\).  Conversely, if \(u\op x=x\),
+set
 \[
    z=u\op((x\op u)\op x).
 \]
 Then \(x\op z=u\) by \(\E{677}\) with parameter \(x\), and another use of the same
-identity gives \(z=x\op(z\op x)\), so \(F_x(z)=z\).  Finally, fixed points of
-\(F_x\) and \(H_x\) correspond through the bijection \(L_x\) by (Conj).
+identity gives \(z=x\op(z\op x)\), so \(F_x(z)=z\).  Taking the forced witness
+\(u=q\), this fixed point is exactly \(x\backslash q\).  Finally, (Conj) shows that
+\(t\) is fixed by \(H_x\) if and only if \(L_x(t)\) is fixed by \(F_x\).  Therefore the
+corresponding fixed point of \(H_x\) is \(x\backslash(x\backslash q)\).
 \end{proof}
 
 \begin{remark}
@@ -429,6 +474,42 @@ the last fixed-point form in the ETP Lemma 13.2 list.  In a bad point, the forwa
 orbit of any element under \(H_x\) must eventually enter a cycle of length greater
 than \(1\).  A finite proof via this route would have to show that such an
 \(H_x\)-cycle is incompatible with the edge products \(x\backslash t=t\op H_x(t)\).
+\end{remark}
+
+\begin{remark}[Nontrivial \(H_x\)-cycles are not the obstruction]\label{rem:hx-cycles}
+The previous remark should not be read as a global no-cycle target.  In the standard
+linear model on \(\mathbb F_5\),
+\[
+   u\op v=2u-v,
+\]
+one checks directly that \(\E{677}\) and \(\E{255}\) both hold.  For fixed \(x\),
+\[
+   H_x(t)=((x\op t)\op x)=3x-2t.
+\]
+Thus \(H_x\) fixes \(x\), while on the other four elements it has a \(4\)-cycle; for
+example, when \(x=0\), the cycle is
+\[
+   1\mapsto 3\mapsto 4\mapsto 2\mapsto 1 .
+\]
+So the finite-map target is not to rule out all nontrivial \(H_x\)-cycles.  It is to
+rule out the fixed-point-free \(H_x\)-dynamics forced at a bad point, using the edge
+products \(x\backslash t=t\op H_x(t)\) or an actual finite-map identity of the kind used
+in the ETP finite-map lemmas.
+\end{remark}
+
+\begin{remark}[Finite-map lemmas need a non-tautological input]
+The finite-map lemmas from the ETP finite chapter apply only after one has produced an
+identity of the form \(f=f\circ f\circ g\) or \(f=g\circ f\circ f\) for concrete
+self-maps of a finite set.  The immediate identities
+\[
+   L_x=L_x\circ L_x\circ L_x^{-1},
+   \qquad
+   L_x^{-1}=L_x^{-1}\circ L_x^{-1}\circ L_x
+\]
+only recover the tautology \(L_x=L_x\circ L_x^{-1}\circ L_x\).  They do not involve the
+right translation \(R_x\), the maps \(H_x=R_xL_x\), \(F_x=L_xR_x\), or the gate
+\(t\mapsto(t\op x)\op t\).  A future finite-map proof should therefore display a
+non-tautological identity for one of those maps before invoking Lemma 5.5 or Lemma 5.6.
 \end{remark}
 
 \section{Collision frontier}
@@ -573,6 +654,12 @@ is also quarantined.  It is not a consequence of the trusted local package.
 \item A proof of universal idempotence, \(d=1\), or any universal small-period conclusion
 would contradict known nontrivial positive models from the ETP finite theory.  Such a
 claim should therefore be audited before it is used.
+\item A proof that \(H_x(t)=((x\op t)\op x)\) has no nontrivial cycles is false as a
+global statement: Remark \ref{rem:hx-cycles} gives a positive \(\mathbb F_5\) model with
+nontrivial \(H_x\)-cycles.  Only fixed-point-free bad-point dynamics is a live target.
+\item A citation of the ETP finite-map lemmas is not by itself a finite proof.  Those
+lemmas require a non-tautological self-map identity; the formal inverse identities for
+\(L_x\) and \(L_x^{-1}\) add no new information.
 \item A nontrivial collision \(d_i=d_j\) does not automatically propagate backwards to
 \(d_{i-1}=d_{j-1}\).  Any cascade proof must derive the propagation or avoid it.
 \end{enumerate}

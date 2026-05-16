@@ -46,7 +46,7 @@ These may be used, but cite or rederive them when writing a proof.
 - With `p=x\x=c_{d-1}`:
   `x\c_k=c_{k-1}`, `c_k\c_{k-1}=d_{k+1}`, `x\p=d_1`, `p\d_1=c_1`, and `p*c_1=d_1`.
 - ETP fixed-point equivalence: `E255` at `x` is equivalent to existence of `u` with `u*x=x`.
-- Fixed-map form: with `H_x(t)=(x*t)*x`, `x\t=t*H_x(t)`.  `H_x` is conjugate via `L_x` to `F_x(t)=x*(t*x)`, and `E255` at `x` is equivalent to either map having a fixed point.
+- Fixed-map form: with `H_x(t)=(x*t)*x`, `x\t=t*H_x(t)`.  `H_x` is conjugate via `L_x` to `F_x(t)=x*(t*x)`, and `E255` at `x` is equivalent to either map having a fixed point.  Such a fixed point is unique: for `F_x` it is `x\q`, and for `H_x` it is `x\(x\q)`.
 - The `L_x`-orbit period is never `2`; a counterexample point has period at least `3`.
 
 ## Current Frontiers
@@ -136,7 +136,7 @@ Also do not promote model agreement, old logs, or examples from deleted search f
 
 ## Work Order
 
-1. Try the fixed-point target `q*x=x`. The sharp finite-map version is now: rule out nontrivial cycles of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. If using finite-map lemmas from ETP Chapter 5, first derive an actual self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division; then apply the finite lemma.
+1. Try the fixed-point target `q*x=x`. The sharp finite-map version is now: at a bad point, rule out fixed-point-free dynamics of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. Do not try to rule out nontrivial `H_x`-cycles globally; positive models such as `u*v=2u-v` on `F_5` have a fixed point and a nontrivial 4-cycle. If using finite-map lemmas from ETP Chapter 5, first derive a non-tautological self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division; the inverse identities for `L_x` and `x\_` alone do not help.
 2. If fixed-point work stalls, use the collision lift only as a counting problem: find a natural small target set for the injective splitter `A_e(y)=y*e`, or explain why no such set is available. Do not revive unsupported collision propagation.
 3. For counterexamples, begin from the right-collision rectangle law and the injective labeled-permutation constraint. A proposed construction that does not explain those rectangles is not yet a construction.
 4. End every attempt with exactly one missing lemma if the proof is unfinished.
