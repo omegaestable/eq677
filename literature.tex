@@ -43,8 +43,8 @@ This note records a proof-oriented package of reductions for the finite implicat
 target law at a point is equivalent to a unique right fixed point, to a left-division
 identity called Lemma L, and to several finite orbit and collision targets.  The orbit
 package now excludes periods \(2\) and \(3\), and isolates a period-four gate.  The note
-also quarantines false trails that should not be reused, including a previously suspected
-quotient family and a full-shift law.
+also records guardrails for older trial routes, including a previously suspected quotient
+family and a full-shift law that both require a fresh derivation before use.
 \end{abstract}
 
 \noindent\textbf{2020 Mathematics Subject Classification.}
@@ -70,15 +70,15 @@ that is, whether every finite magma satisfying \(\E{677}\) also satisfies \(\E{2
 The Equational Theories Project (ETP) paper singles out this finite implication, up to
 duality, together with the dual implication \(\E{2910}\models_{\fin}\E{47}\)~\cite[Problem
 8.1]{ETPPaper}.  The ETP blueprint chapter on Equation 677 contains the local structure
-theory and the standard finite obstructions used below~\cite{ETP677}; the dashboard is a
+theory and the standard finite tools used below~\cite{ETP677}; the dashboard is a
 source for cross-checking equation labels~\cite{ETPDashboard}.
 
 This note is a proof dossier, not a broad search report.  The reductions below are
 organized around a fixed element \(x\) of a finite \(\E{677}\)-magma.  They show that the
 target law at \(x\) is the same as a single right fixed point, that any such fixed-point
 witness is unique, and that the same target can be expressed as a left-division identity
-(Lemma L).  The later sections turn possible failures of the direct fixed-point route
-into explicit finite orbit and collision targets.
+(Lemma L).  The later sections turn the remaining cases after the direct fixed-point
+route into explicit finite orbit and collision targets.
 
 \section{Preliminaries and external input}
 
@@ -425,6 +425,75 @@ now gives
 contradicting \(c_0\neq c_2\).
 \end{proof}
 
+\begin{lemma}[Period-four branch bookkeeping]\label{lem:period-four-bookkeeping}
+Assume that the \(L_x\)-orbit of \(x\) has period \(4\), with notation as in
+Lemma~\ref{lem:period-four-gate}.  Put
+\[
+   s=p\op x,
+   \qquad
+   h=r\op q .
+\]
+Then
+\[
+   q\op s=a,
+   \qquad
+   (p\op q)\op p=s,
+   \qquad
+   a\op h=r .
+\]
+If moreover \(r\notin\{x,a,q,p\}\), and if
+\[
+   t=q\op a,
+\]
+then
+\[
+   x\op t=r,
+   \qquad
+   t\notin\{x,a,q,p,r\}.
+\]
+Consequently a period-four external counterexample has at least two elements outside the
+principal \(L_x\)-orbit, namely \(r\) and \(t\).
+\end{lemma}
+
+\begin{proof}
+The equality \(q\op s=a\) is the orbit recurrence at \(k=2\), since
+\(s=d_3=p\op x\).  Lemma~\ref{lem:key-identity}, applied with \(y=x\) and
+\(z=q\), gives
+\[
+   (x\op(x\op q))\op x
+   =q\op(((x\op q)\op q)\op(x\op q)).
+\]
+Using \(x\op q=p\) and \(x\op p=x\), this becomes
+\[
+   a=q\op((p\op q)\op p).
+\]
+Since the orbit recurrence also gives \(a=q\op s\), left cancellation by \(q\) gives
+\((p\op q)\op p=s\).
+
+Next apply \(\E{677}\) with law variable \(r\) and parameter \(a\).  Using
+\(a\op r=x\) and \(x\op a=q\), one obtains
+\[
+   r=a\op\bigl(r\op((a\op r)\op a)\bigr)
+    =a\op(r\op(x\op a))
+    =a\op(r\op q)
+    =a\op h .
+\]
+
+Finally assume \(r\notin\{x,a,q,p\}\).  Lemma~\ref{lem:transformed}, applied with
+\(y=a\) and \(z=r\), gives
+\[
+   r=(a\op r)\op((a\op(a\op r))\op a)
+    =x\op((a\op x)\op a)
+    =x\op(q\op a)
+    =x\op t .
+\]
+Since \(L_x\) permutes the principal orbit cyclically, no element of
+\(\{x,a,q,p\}\) can be mapped by \(L_x\) to the external element \(r\).  Hence
+\(t\notin\{x,a,q,p\}\).  Also \(t\neq r\), for otherwise
+\(q\op a=q\op x\), and left cancellation by \(q\) would give \(a=x\), contrary to
+the period-four orbit.  This proves the claim.
+\end{proof}
+
 \section{The route graph}
 
 The following display is the dependency graph used in the rest of the note.  The first
@@ -444,7 +513,7 @@ right-collision rigidity.
 &&&&& (q\op x)\op q=p .
 \end{array}
 \]
-If the fixed point is not established, the two honest remaining branches are
+When working under the contrary assumption \(q\op x\neq x\), two concrete branches are
 \[
 \begin{array}{ccccc}
 d_i=d_j=e
@@ -455,8 +524,35 @@ x\notin\operatorname{im}R_x
 &\Longrightarrow& (y\op r)\op y=r\backslash x.
 \end{array}
 \]
-The dashed arrow is a missing lemma, not a theorem; the collision branch is now best
-viewed as a counting problem rather than a direct propagation problem.
+The dashed arrow marks a lemma to supply: the collision branch is most useful as a
+finite-counting problem rather than a direct propagation problem.
+
+\begin{target}[Single local gap]\label{target:single-gap}
+For fixed \(x\), put \(a=x\op x\), \(q=a\op x\), and \(p=x\backslash x\).  The local
+target is any one of the equivalent statements
+\[
+   q\op x=x,
+   \qquad
+   ((x\op x)\op((x\op x)\op x))\op(x\op x)=x,
+   \qquad
+   (q\op x)\op q=p .
+\]
+Under the contrary assumption \(q\op x\neq x\), the right-translation argument gives a
+fiber
+\[
+   F_r=\{t:t\op x=r\},
+   \qquad
+   A_r(t)=t\op r,
+\]
+with at least two elements on which \(A_r\) is injective, and with the rectangle law
+\[
+   (t\op r)\op t=r\backslash x
+   \qquad(t\in F_r).
+\]
+The target in this branch is to turn this injective splitter into a finite contradiction,
+a fixed point, or Lemma L.  The splitter is useful structure to exploit; the next lemma
+should add a small-image, collision, or fixed-point mechanism.
+\end{target}
 
 \section{The fixed-point route}
 
@@ -533,12 +629,11 @@ finite \(\E{677}\) setting, to \(\EqAt{\E{255}}{x}\).
 \end{definition}
 
 \begin{remark}
-Lemma L is a target, not an established lemma.  Because the unrestricted implication
-\(\E{677}\models\E{255}\) is false~\cite[Section 13.2]{ETP677}, any successful proof of
-the fixed-point route must use finiteness in a visible way: for example through left
-bijection, orbit periodicity, a finite-map lemma, or a collision argument.  A derivation
-that simply rewrites \(\E{677}\) into Lemma L without using finite structure should be
-treated as suspect.
+Lemma L is a finite proof target.  Because the unrestricted implication
+\(\E{677}\models\E{255}\) is false~\cite[Section 13.2]{ETP677}, this route should make
+its finite step visible: for example through left bijection, orbit periodicity, a
+finite-map lemma, or a collision argument.  A derivation that rewrites \(\E{677}\) into
+Lemma L should identify exactly where finite structure enters.
 \end{remark}
 
 \begin{lemma}[Fixed-map and edge-product form]\label{lem:fixed-map}
@@ -566,8 +661,8 @@ and the fixed point of \(H_x\) is
 \[
    x\backslash(x\backslash q).
 \]
-Thus, if the target fails at \(x\), both maps are fixed-point-free and every cycle of
-either map has length at least \(2\).
+Thus, under the contrary assumption \(q\op x\neq x\), both maps are fixed-point-free and
+every cycle of either map has length at least \(2\).
 \end{lemma}
 
 \begin{proof}
@@ -619,8 +714,9 @@ would have to show that such an
 \(H_x\)-cycle is incompatible with the edge products \(x\backslash t=t\op H_x(t)\).
 \end{remark}
 
-\begin{remark}[Nontrivial \(H_x\)-cycles are not the obstruction]\label{rem:hx-cycles}
-The previous remark should not be read as a global no-cycle target.  In the standard
+\begin{remark}[Cycle-target calibration]\label{rem:hx-cycles}
+The previous remark is a local finite-dynamics hint, not a global no-cycle target.  In
+the standard
 linear model on \(\mathbb F_5\),
 \[
    u\op v=2u-v,
@@ -634,10 +730,10 @@ example, when \(x=0\), the cycle is
 \[
    1\mapsto 3\mapsto 4\mapsto 2\mapsto 1 .
 \]
-So the finite-map target is not to rule out all nontrivial \(H_x\)-cycles.  It is to
-rule out the fixed-point-free \(H_x\)-dynamics forced before the target is proved, using the edge
-products \(x\backslash t=t\op H_x(t)\) or an actual finite-map identity of the kind used
-in the ETP finite-map lemmas.
+So the finite-map target is the sharper local one: rule out the fixed-point-free
+\(H_x\)-dynamics forced by the contrary assumption, using the edge products
+\(x\backslash t=t\op H_x(t)\) or an actual finite-map identity of the kind used in the
+ETP finite-map lemmas.
 \end{remark}
 
 \begin{remark}[Finite-map lemmas need a non-tautological input]
@@ -651,8 +747,8 @@ self-maps of a finite set.  The immediate identities
 \]
 only recover the tautology \(L_x=L_x\circ L_x^{-1}\circ L_x\).  They do not involve the
 right translation \(R_x\), the maps \(H_x=R_x\circ L_x\), \(F_x=L_x\circ R_x\), or the gate
-\(t\mapsto(t\op x)\op t\).  A future finite-map proof should therefore display a
-non-tautological identity for one of those maps before invoking Lemma 5.5 or Lemma 5.6.
+\(t\mapsto(t\op x)\op t\).  A useful finite-map proof will display a non-tautological
+identity for one of those maps before invoking Lemma 5.5 or Lemma 5.6.
 \end{remark}
 
 \section{Collision target}
@@ -708,7 +804,7 @@ pressure requested in Target~\ref{prob:collision-target}.
 
 \section{Right-collision constraints}
 
-Suppose the fixed-point target fails at \(x\), so \(q\op x\neq x\).  Proposition~\ref{prop:unique-witness}
+Work under the contrary assumption \(q\op x\neq x\).  Proposition~\ref{prop:unique-witness}
 says that no element \(u\) has \(u\op x=x\).  Thus \(x\notin\operatorname{im}R_x\).  Since
 \(M\) is finite, \(R_x\) is not injective, and there exist \(y\neq z\) and \(r\neq x\)
 such that
@@ -771,43 +867,46 @@ distinct permutations
    \sigma(\sigma(z)(r))(z).
 \]
 
-The ETP affine-extension obstruction~\cite[Lemma 13.4]{ETP677} is therefore best used as
-a warning against importing linear or affine intuition into this proof target.
+The ETP affine-extension obstruction~\cite[Lemma 13.4]{ETP677} is useful calibration:
+linear or affine intuition should be checked against the right-collision rectangles
+before being used in this proof target.
 
-\section{Obstructions and false routes}
+\section{Proof guardrails and trial-route notes}
 
-Several attractive shortcuts are invalid or unsupported.
+The following notes keep the proof package lean by marking which attractive shortcuts
+need an additional derivation before they can be used.
 
 \begin{enumerate}
 \item The family
 \[
    d_k\backslash x=c_{k-2}\op c_{k-1}
 \]
-should not be used.  The old derivation confused \(c_{k-1}\op x\) with \(d_k\); by
-definition it is \(d_{k-1}\).  The active repository does not contain a publication-ready
-finite table witness for this failure, so the present paper records only the derivation
-error and quarantines the identity.
+is not part of the trusted package.  The old derivation confused \(c_{k-1}\op x\) with
+\(d_k\); by definition it is \(d_{k-1}\).  A future proof may revive this family only by
+giving a new derivation.
 \item The full-shift law
 \[
    p\op d_k=d_{k+1}
 \]
-is also quarantined.  It is not a consequence of the trusted local package.
+is also not part of the trusted package and should be rederived before use.
 \item A proof of universal idempotence, \(d=1\), or any universal small-period conclusion
 would contradict known nontrivial positive models from the ETP finite theory.  Such a
-claim should therefore be audited before it is used.
-\item A proof that \(H_x(t)=((x\op t)\op x)\) has no nontrivial cycles is false as a
-global statement: Remark~\ref{rem:hx-cycles} gives a positive \(\mathbb F_5\) model with
-nontrivial \(H_x\)-cycles.  Only fixed-point-free bad-point dynamics is a live target.
-\item A citation of the ETP finite-map lemmas is not by itself a finite proof.  Those
-lemmas require a non-tautological self-map identity; the formal inverse identities for
-\(L_x\) and \(L_x^{-1}\) add no new information.
-\item A nontrivial collision \(d_i=d_j\) does not automatically propagate backwards to
-\(d_{i-1}=d_{j-1}\).  Any cascade proof must derive the propagation or avoid it.
+claim needs an explicit audit before it is used.
+\item A proof that \(H_x(t)=((x\op t)\op x)\) has no nontrivial cycles is too strong as
+a global target: Remark~\ref{rem:hx-cycles} gives a positive \(\mathbb F_5\) model with
+nontrivial \(H_x\)-cycles.  The sharper target is fixed-point-free bad-point dynamics.
+\item The ETP finite-map lemmas become useful after deriving a non-tautological self-map
+identity; the formal inverse identities for \(L_x\) and \(L_x^{-1}\) do not yet engage
+those lemmas.
+\item A nontrivial collision \(d_i=d_j\) can support a cascade proof only after the
+propagation \(d_{i-1}=d_{j-1}\), or a replacement counting step, has been derived.
 \end{enumerate}
 
 \section{Proof targets}
 
-The work above leaves three precise proof targets.
+The work above leaves three operational proof targets.  Target~\ref{target:single-gap}
+records their common local bottleneck: prove Lemma L directly, or close the
+finite-counting splitter gap.
 
 \begin{target}[Fixed-point route]
 Prove \(q\op x=x\), equivalently Lemma L from Definition~\ref{def:lemma-l}, by an
@@ -833,7 +932,7 @@ The reductions in this note use left cancellation only after
 Proposition~\ref{prop:left-division}, where finiteness has made each \(L_a\) bijective.  They do not
 use right cancellation, associativity, an identity element, or group/quasigroup structure.
 Future work should state which proof target it attacks and end, if unfinished, with one
-missing lemma rather than a broad search prescription.
+next lemma rather than a broad search prescription.
 
 Every new proof attempt should check the following list before being added to the
 mathematical record.
@@ -842,8 +941,8 @@ mathematical record.
 \item Every cancellation is a left cancellation by a known bijective left translation.
 \item Every use of finiteness is named: left bijectivity, orbit periodicity, a finite-map
 lemma, or pigeonhole reasoning for a self-map.
-\item The false quotient family and false full-shift law are not used.
-\item Any claimed obstruction or construction contains either a complete finite operation
+\item The retired quotient family and full-shift law are used only if rederived.
+\item Any claimed construction or structural constraint contains either a complete finite operation
 or a structural verification of the relevant identities.
 \end{enumerate}
 

@@ -88,7 +88,7 @@ Prove the gate-collapse identity
 (q*x)*q = x\x.
 ```
 
-A finite-map attack on this route should first derive an actual identity of the ETP Lemma 5.5 or 5.6 form, such as `F=F*F*G` or `F=G*F*F`, for one of the self-maps naturally attached to `x` (`R_x`, `L_x R_x`, `R_x L_x`, `L_x S`, left division by `q`, or the gate map above). Without such a self-map identity, the finite-map lemmas do not yet engage.
+A finite-map attack on this route should first derive an actual identity of the ETP Lemma 5.5 or 5.6 form, such as `F=F*F*G` or `F=G*F*F`, for one of the self-maps naturally attached to `x` (`R_x`, `L_x R_x`, `R_x L_x`, `L_x S`, left division by `q`, or the gate map above). Once such a self-map identity is available, the finite-map lemmas have a concrete place to engage.
 
 ## Route 2: collision lift
 
@@ -143,17 +143,17 @@ The separate inequality `c_i*e != c_j*e` for `i != j` is the injectivity of `A_e
 
 ### Audit
 
-Only transformed `E677` and left cancellation are used. No right cancellation or collision propagation is used. This also avoids the false quotient family and the false full-shift law.
+Only transformed `E677` and left cancellation are used. The argument respects the guardrails on right cancellation, collision propagation, the retired quotient family, and the retired full-shift law.
 
 ### Route assessment
 
-The old missing lemma
+The old direct target
 
 ```text
 d_i=d_j => q*x=x or c_i*e=c_j*e
 ```
 
-is still formally valid as a target, but it is not a promising direct algebraic propagation statement: the local fiber law proves `c_i*e` and `c_j*e` must be distinct for a genuine collision. The route needs an additional finite counting pressure that forces the injective splitter `A_e` to land in a set too small, or else it should be bypassed.
+is still formally valid as a target, but the local fiber law shows where the useful work lies: for a genuine collision, `c_i*e` and `c_j*e` must be distinct. The route needs an additional finite counting pressure that forces the injective splitter `A_e` to land in a set too small, or it should be paired with a direct fixed-point argument.
 
 ### Next lemma
 
@@ -165,17 +165,17 @@ A_e({ c_k : c_k*x=e }) subset B_e
 
 and `|B_e|` is strictly smaller than the collided orbit fiber unless `q*x=x`.
 
-Without such a size restriction, the collision route has no remaining independent mechanism.
+With such a size restriction, the collision route becomes a finite counting proof.
 
 ## Route 3: right-collision constraints
 
 ### Claim
 
 The right-collision rectangles impose a sharper constraint on any proof route that passes
-through a failed fixed-point target.
+through the contrary fixed-point assumption.
 
-First, in labeled-permutation notation `a*b=sigma(a)(b)`, if the fixed-point target fails
-at `x`, then no label sends `x` to itself. Hence the column map
+First, in labeled-permutation notation `a*b=sigma(a)(b)`, under the contrary assumption
+at `x`, no label sends `x` to itself. Hence the column map
 
 ```text
 y |-> sigma(y)(x)
@@ -195,7 +195,7 @@ sigma(sigma(y)(r))(y) = r\x,
 sigma(sigma(z)(r))(z) = r\x.
 ```
 
-Second, for a homomorphic finite fiber extension `pi : M -> G` over a positive base `G` satisfying `E255`, a failure at a lift cannot occur at the base level. If `x` lies over `g` and `q_G=(g*g)*g`, then `q_G*g=g` in the base. A failed lift must make the fiber map
+Second, for a homomorphic finite fiber extension `pi : M -> G` over a positive base `G` satisfying `E255`, the contrary assumption at a lift cannot occur at the base level. If `x` lies over `g` and `q_G=(g*g)*g`, then `q_G*g=g` in the base. The lifted contrary case must make the fiber map
 
 ```text
 Phi_x : pi^{-1}(q_G) -> pi^{-1}(g),
@@ -220,7 +220,7 @@ For the fiber-extension statement, homomorphicity gives
 pi(u*x)=pi(u)*pi(x)=q_G*g=g
 ```
 
-whenever `pi(u)=q_G`. Thus `Phi_x` maps the witness fiber over `q_G` into the fiber over `g`. If the lift fails the fixed-point target, no `u` satisfies `u*x=x`, so `x` is missing from the image of `Phi_x`. With equal finite fiber sizes, `Phi_x` cannot be injective. Thus there are distinct `u,v` over `q_G` with
+whenever `pi(u)=q_G`. Thus `Phi_x` maps the witness fiber over `q_G` into the fiber over `g`. In the lifted contrary case, no `u` satisfies `u*x=x`, so `x` is missing from the image of `Phi_x`. With equal finite fiber sizes, `Phi_x` cannot be injective. Thus there are distinct `u,v` over `q_G` with
 
 ```text
 u*x=v*x=r != x,
@@ -230,7 +230,7 @@ and Route 2 applies to this collision.
 
 ### Audit
 
-The argument uses only left bijectivity, transformed `E677`, homomorphic projection, finite pigeonhole reasoning, and the base fact `E255` in `G`. It does not use right cancellation, associativity, identities, group or quasigroup intuition, the false quotient family, or the false full-shift law.
+The argument uses only left bijectivity, transformed `E677`, homomorphic projection, finite pigeonhole reasoning, and the base fact `E255` in `G`. It respects the guardrails on right cancellation, associativity, identities, group or quasigroup intuition, the retired quotient family, and the retired full-shift law.
 
 ### Next lemma
 
@@ -244,7 +244,7 @@ This is narrower than a general table search: the collision must occur over the 
 
 ## Global audit
 
-This pass records one fixed-point gate, downgrades the standalone collision route to a counting-only route, and sharpens right-collision constraints to a witness-fiber obstruction. All products above are parenthesized when ambiguity matters, every cancellation is left cancellation, and no banned move from `RAILROAD.md` is used.
+This pass records one fixed-point gate, redirects the standalone collision route to a counting route, and sharpens right-collision constraints to a witness-fiber obstruction. All products above are parenthesized when ambiguity matters, every cancellation is left cancellation, and the proof guardrails from `RAILROAD.md` are respected.
 
 ## Deeper source pass addendum
 
@@ -321,4 +321,4 @@ For a proof agent, the priority lemma in this historical pass was:
 No nontrivial cycle of H_x(t)=(x*t)*x is compatible with x\t=t*H_x(t),
 ```
 
-or, failing that, identify the exact compatible cycle inside an injectively labeled permutation system satisfying the right-collision rectangles. The newer `literature.tex` period-four gate should be tried first.
+or identify the exact compatible cycle inside an injectively labeled permutation system satisfying the right-collision rectangles. The newer `literature.tex` period-four gate should be tried first.
