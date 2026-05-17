@@ -152,7 +152,7 @@ Audit warning: do not infer `p*a=r` in period four.  The trusted recurrence at `
 gives `p*a=q`; the recurrence at `k=2` gives `q*(p*x)=a`.  Confusing these is another
 index slip of the same flavor as the retired quotient-family route.
 
-### 0b. Order-Ten Period-Five And Period-Six Frontier
+### 0b. Order-Ten Period-Five, Period-Six, And Period-Seven Frontier
 
 For `d=5`, label
 
@@ -168,22 +168,23 @@ g=q*x=a*((b*a)*b),   q*((a*q)*a)=x,   (a*q)*a=x*(g*q).
 ```
 
 Under the bad-point package, `g notin {x,b}`.  Search status on order `10`, period `5`:
-complement partitions `3,1,1`, `2,2,1`, `2,1,1,1`, and `1,1,1,1,1` are `unsat`.
-The remaining larger partitions are being split by `g=q*x`: complement `5` has
-`g=0,1,2,3,4` `unsat`, where `g=4` closed after the single residual `a*q=8` was split
-by all ten `g*q` values, and `g=5` is down to `a*q=7,8,9` after `a*q=2,5,6` closed by
-`g*q`; `g=6` is down to `a*q=5,7,8,9` after `a*q=2` closed by `g*q`.  Complement `4,1` has every `g` value except `g=7` `unsat`,
-and `g=7` has only `a*q=5,8` residuals, now split by `g*q`.  Complement `3,2` has
-`g=0,1,2,3,4` `unsat`, where `g=4` is closed by splitting `a*q`; remaining residuals
-are `g=5/a*q=4,6`, `g=6/a*q=7,8`, and `g=7/a*q=2,5,7`, while `g=8,9` timed out in the
-parent split.
+closed.  Complement partitions `3,1,1`, `2,2,1`, `2,1,1,1`, and `1,1,1,1,1` are
+`unsat`; complement `4,1` is closed for every `g=q*x` value; complement `5` closed after
+the final `g=5,6` residuals were split by `a*q` and `g*q`; and complement `3,2` closed
+after the final residuals `g=6/a*q=7,8` and `g=7/a*q=5,7` were split by all ten `g*q`
+values.
 
-For `d=6`, order `10` complement partitions `2,1,1` and `1,1,1,1` are `unsat`, and
-partition `3,1` is closed because all ten `q*x` values are `unsat`.  Partitions `4` and
-`2,2` have timed-out `q*x` residuals split by `a*q` using `--fix-cell 1:4:value`.
-Partition `4`, `q*x=4` is closed after the lone `a*q=2` residual was split by all ten
-`g*q` values; `q*x=5,6,7,8,9` are now under `a*q` splits.  Partition `2,2`, `q*x=2` is
-closed by all ten `a*q` values, leaving only parent residual `q*x=6` under an `a*q` split.
+For `d=6`, order `10` is closed: complement partitions `2,1,1`, `1,1,1,1`, `4`, and
+`2,2` are `unsat`, and partition `3,1` is closed because all ten `q*x` values are
+`unsat`.  Partition `4` closed after its final residual `q*x=8/a*q=8` was split by all
+ten `g*q` values; partition `2,2` closed after its final parent residual `q*x=6` was
+split by all ten `a*q` values.
+
+The broad order `10` sweep closed periods `8` and `9` as `unsat`.  Focused splits have
+closed periods `5` and `6`; the remaining order-10 broad-frontier cases are periods `7`
+and `10`.  For period `7`, complement partition `1,1,1` is `unsat`; complement `2,1`
+times out at `120 s`; complement `3` has `g=q*x=0,4` `unsat` and every other `g` value
+timed out at `60 s`, so the next split is `a*q` inside those residual `g` branches.
 
 ### 1. Unique Fixed-Point Witness
 
@@ -273,7 +274,7 @@ new lemmas, not as evidence by themselves.
 ## Work Order
 
 1. Continue mining the period-four computational closure for a proof, especially the `r=p` side and the external `L_x`-cycle recurrence. Use only the orbit recurrence, transformed identity, key identity, and left cancellation.
-2. For the active counterexample dig, finish order `10`, period `5` by splitting the residual `g=q*x` branches, then repeat the same discipline for period `6` by `q*x` and a second fixed cell when a slice times out.
+2. For the active counterexample dig, order `10` periods `5` and `6` are closed; the remaining broad period cases are `7` and `10`.  Split them first by `L_x` complement-cycle partitions, then by the strongest period-local fixed cells found in the corresponding gate.
 3. If the period-specific work stalls, return to the fixed-point target `q*x=x`. The sharp finite-map version is: before the target is proved at `x`, rule out fixed-point-free dynamics of `H_x(t)=(x*t)*x` compatible with the edge products `x\t=t*H_x(t)`. Use positive models such as `u*v=2u-v` on `F_5` as calibration: global nontrivial `H_x`-cycles may exist when the fixed point already exists. If using finite-map lemmas from ETP Chapter 5, first derive a non-tautological self-map identity involving `H_x`, `F_x`, `L_x`, `R_x`, `S`, `L_q`, or left division.
 4. If fixed-point work stalls, use the collision lift as a counting problem: find a natural small target set for the injective splitter `A_e(y)=y*e`, or derive collision propagation as a new lemma rather than assuming it.
 5. End unfinished attempts with exactly one next lemma.

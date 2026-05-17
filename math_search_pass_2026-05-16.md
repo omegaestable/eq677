@@ -252,20 +252,25 @@ Z3 timeout.
 | `order=10`, period `4`, external exact sizes `3`, `4`, `5`, `6` | all `unsat`; closes external branch |
 | `order=10`, period `4`, branch `r=p`, complement partitions except `4,2` | all `unsat` |
 | `order=10`, period `4`, branch `r=p`, complement `4,2`, split by `p*x` | all ten values `unsat`; closes `r=p` |
-| `order=10`, period `5` | timeout at `900 s`; complement partition split active |
-| `order=10`, period `6` | timeout at `900 s`; complement partition split active |
-| `order=10`, period `7` | timeout at `900 s` in the broad run |
+| `order=10`, period `5` | all complement partitions closed; no order-10 period-five bad witness remains |
+| `order=10`, period `6` | all complement partitions closed; no order-10 period-six bad witness remains |
+| `order=10`, period `7` | timeout at `900 s` in the broad run; complement partition split started |
 | `order=10`, period `8` | `unsat`, about `701 s` in the broad run |
 | `order=10`, period `9` | `unsat`, about `458 s` in the broad run |
+| `order=10`, period `10` | timeout at `900 s` in the broad run |
 | `order=10`, period `5`, complement `3,1,1`, `2,2,1`, `2,1,1,1`, `1,1,1,1,1` | all `unsat` |
-| `order=10`, period `5`, complement `5`, `4,1`, `3,2` | timeout at `300 s`; split by `g=q*x` active |
-| `order=10`, period `5`, complement `5`, `g=0,1,2,3,4` | all `unsat`; `g=4` closed after the lone `a*q=8` residual split by all ten `g*q` values; `g=5` now has only `a*q=7,8,9` residuals after `a*q=2,5,6` closed by `g*q`; `g=6` now has only `a*q=5,7,8,9` residuals after `a*q=2` closed by `g*q`; `g=7,8,9` timed out in the parent |
-| `order=10`, period `5`, complement `4,1`, `g=0,1,2,3,4,5,6,8,9` | all `unsat`; `g=7` has only `a*q=5,8` residuals, now split by `g*q` |
-| `order=10`, period `5`, complement `3,2`, `g=0,1,2,3,4` | all `unsat`, with `g=4` closed by the `a*q` split; `g=5` has only `a*q=4,6` residuals; `g=6` has only `a*q=7,8` residuals; `g=7` has only `a*q=2,5,7` residuals; `g=8,9` timed out in the parent |
+| `order=10`, period `5`, complement `5`, `4,1`, `3,2` | all closed after `g=q*x`, `a*q`, and final `g*q` splits |
+| `order=10`, period `5`, complement `5` | all `g=0,1,2,3,4,5,6,7,8,9` closed; final residuals for `g=5,6` closed by all ten `g*q` values in each remaining `a*q` cell |
+| `order=10`, period `5`, complement `4,1` | all `g=0,1,2,3,4,5,6,7,8,9` closed; the last case `g=7` closed after `a*q=5,8` were each split by all ten `g*q` values |
+| `order=10`, period `5`, complement `3,2` | all `g=0,1,2,3,4,5,6,7,8,9` closed; final residuals `g=6/a*q=7,8` and `g=7/a*q=5,7` closed by all ten `g*q` values |
 | `order=10`, period `6`, complement `2,1,1` and `1,1,1,1` | both `unsat` |
 | `order=10`, period `6`, complement `3,1`, split by `q*x` | all ten values `unsat`; closes this partition |
-| `order=10`, period `6`, complement `4`, split by `q*x` | `q*x=0,1,2,3` `unsat`; `q*x=4` closed after `a*q=2` was split by all ten `g*q` values; `q*x=5,6,7,8,9` timed out in the parent and are split by `a*q` |
-| `order=10`, period `6`, complement `2,2`, split by `q*x` | `q*x=0,1,3,4,5,7,8,9` `unsat`; `q*x=2` closed by all ten `a*q` values; `q*x=6` timed out in the parent and is split by `a*q` |
+| `order=10`, period `6`, complement `4`, split by `q*x` | all ten `q*x` values closed; the final residual `q*x=8/a*q=8` closed after splitting all ten `g*q` values |
+| `order=10`, period `6`, complement `2,2`, split by `q*x` | all ten `q*x` values closed; final residual `q*x=6` closed by all ten `a*q` values |
+| `order=10`, period `6` | all complement partitions closed; no order-10 period-six bad witness remains |
+| `order=10`, period `7`, complement `1,1,1` | `unsat` with the optimized complement-cycle recurrence |
+| `order=10`, period `7`, complement `2,1` | timeout at `120 s`; needs a `g=q*x` split |
+| `order=10`, period `7`, complement `3`, split by `g=q*x` | `g=0,4` `unsat`; all other `g` values timed out at `60 s`; next split is `a*q` inside each residual `g` value |
 
 The ablation says the mathematical bad-point constraints are currently the biggest win,
 and the transformed/key identities plus splitter constraints are both material.

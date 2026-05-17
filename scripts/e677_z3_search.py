@@ -329,9 +329,48 @@ class E677Search:
                 self.add(self.mul(0, label) == self.as_expr(label), group="lx_complement_cycles")
             else:
                 for offset in range(size - 1):
-                    self.add(self.mul(0, label + offset) == self.as_expr(label + offset + 1), group="lx_complement_cycles")
+                    self.add(
+                        self.mul(0, label + offset) == self.as_expr(label + offset + 1),
+                        group="lx_complement_cycles",
+                    )
                 self.add(self.mul(0, label + size - 1) == self.as_expr(label), group="lx_complement_cycles")
+            for offset in range(size):
+                node = label + offset
+                next_node = label + ((offset + 1) % size)
+                previous_node = label + ((offset - 1) % size)
+                self.add(
+                    self.mul(node, self.mul(next_node, 0)) == self.as_expr(previous_node),
+                    group="lx_complement_cycle_recurrence",
+                )
             label += size
+
+    def add_period_orbit_derived_constraints(self) -> None:
+        period = self.config.period
+        if period is None:
+            return
+        x = 0
+        for index in range(period):
+            node = index
+            next_node = (index + 1) % period
+            next_next_node = (index + 2) % period
+            node_x = self.mul(node, x)
+            self.add(
+                self.mul(node_x, self.mul(self.mul(node, node_x), node)) == self.as_expr(x),
+                group="period_transformed_orbit_derived",
+            )
+            self.add(
+                self.mul(next_next_node, x)
+                == self.mul(node, self.mul(self.mul(next_node, node), next_node)),
+                group="period_key_orbit_derived",
+            )
+        if self.config.add_bad_point_lemmas and period >= 4:
+            q = period - 2
+            g = self.mul(q, x)
+            self.add(
+                g != self.as_expr(period - 3),
+                self.mul(x, g) != self.as_expr(q),
+                group="period_bad_point_derived",
+            )
 
     def add_period_four_gate(self) -> None:
         if self.config.period != 4:
@@ -485,6 +524,7 @@ class E677Search:
         self.add_fixed_cell_constraints()
         self.add_period_constraints()
         self.add_lx_complement_cycle_constraints()
+        self.add_period_orbit_derived_constraints()
         self.add_period_four_gate()
         self.add_period_five_gate()
         self.add_period_six_gate()

@@ -136,27 +136,21 @@ broad two-cycle case is `unsat`, the broad third-point case timed out, and the e
 external cycle sizes `3`, `4`, `5`, and `6` are all `unsat`.  The `r=p` side closes after
 splitting the six-point complement cycle partition: all partitions are `unsat` except
 `4,2` at the first timeout, and that residual is `unsat` for every possible value of
-`p*x`.  The active order `10` frontier is now period `5` and period `6`; both broad cases
-timed out once at `900 s`.  In period `5`, complement partitions `3,1,1`, `2,2,1`,
-`2,1,1,1`, and `1,1,1,1,1` are `unsat`; the larger partitions `5`, `4,1`, and `3,2`
-timed out at `300 s` and are being split by `g=q*x`.  Current period-five split progress:
-complement `5` has `g=0,1,2,3,4` `unsat`, with `g=4` closed after splitting the lone
-`a*q=8` residual by all ten `g*q` values; `g=5` is down to `a*q=7,8,9` after
-`a*q=2,5,6` closed by `g*q`, and `g=6` is down to `a*q=5,7,8,9` after
-`a*q=2` closed by `g*q`;
-complement `4,1` has every `g` value except `g=7` `unsat`, with `g=7` under an `a*q`
-split and only `a*q=5,8` residuals remaining; complement `3,2` has `g=0,1,2,3,4`
-`unsat` after closing `g=4` by `a*q`, with residuals `g=5/a*q=4,6`,
-`g=6/a*q=7,8`, and `g=7/a*q=2,5,7`.
-Period `6` complement partitions `2,1,1` and `1,1,1,1` are `unsat`; partition `3,1`
-is closed because all ten `q*x` values are `unsat`; partitions `4` and `2,2` remain open
-only in timed-out `q*x` residuals.  Partition `4`, `q*x=4` is closed after the lone
-`a*q=2` residual split by all ten `g*q` values; `q*x=5,6,7,8,9` are now split by `a*q`.
-Partition `2,2`, `q*x=2` is closed by all ten `a*q` values; only parent `q*x=6` remains
-as an `a*q` split.
+`p*x`.  The active order `10` frontier from the broad sweep is now only periods `7` and
+`10`.  Period `5` is fully closed: smaller complement partitions `3,1,1`, `2,2,1`,
+`2,1,1,1`, and `1,1,1,1,1` are `unsat`, complement `4,1` is closed for every `g=q*x`
+value, complement `5` closed after its final `g=5,6` residuals were split by `a*q` and
+`g*q`, and complement `3,2` closed after the final residuals `g=6/a*q=7,8` and
+`g=7/a*q=5,7` were split by all ten `g*q` values.
+Period `6` complement partitions `2,1,1`, `1,1,1,1`, `4`, and `2,2` are `unsat`;
+partition `3,1` is closed because all ten `q*x` values are `unsat`.  Partition `4` closed
+after the final residual `q*x=8/a*q=8` was split by all ten `g*q` values.  Partition
+`2,2` closed after the final parent residual `q*x=6` was split by all ten `a*q` values.
 The broad order `10` run also closed periods `8` and `9` as `unsat` in about `701 s` and
-`458 s`, respectively; periods `5`, `6`, and `7` timed out in that broad run and need the
-focused splits above.
+`458 s`, respectively.  Focused splits have now closed periods `5` and `6`.  Period `7`
+has complement `1,1,1` closed, while complement `2,1` still times out at `120 s` and
+complement `3` has only `g=q*x=0,4` closed after a first `g` split; periods `7` and `10`
+are the remaining order-10 broad-frontier cases.
 
 Two additional ground packages were added after this split.  In period-four `r=p`, the
 searcher now records `p*x=(q*q)*q=a*(q*q)`.  In period five, with
@@ -165,9 +159,9 @@ searcher now records `p*x=(q*q)*q=a*(q*q)`.  In period five, with
 In period six, with `x=c0,a=c1,b=c2,c=c3,q=c4,p=c5,h=c*x,g=q*x`, it records
 `h=a*((b*a)*b)`, `g=b*((c*b)*c)`, `q*((a*q)*a)=x`, `(a*q)*a=x*(g*q)`, and `g!=x`.
 
-Queued implementation improvement: once the current long loops finish, extend
-`--lx-complement-cycles` with the same local recurrence already used on the principal
-orbit.  If a complement `L_x` cycle is labeled cyclically as `e_i -> e_{i+1}`, add
-`e_i*(e_{i+1}*x)=e_{i-1}` for every position.  This is a direct instance of the proven
-local recurrence and should prune period-five and period-six partition splits without
-adding any new branch assumption.
+Implemented searcher improvement: `--lx-complement-cycles` now also adds the local
+recurrence already used on the principal orbit.  If a complement `L_x` cycle is labeled
+cyclically as `e_i -> e_{i+1}`, the solver adds `e_i*(e_{i+1}*x)=e_{i-1}` for every
+position.  The searcher also adds period-uniform ground instances of the transformed and
+key identities along the principal orbit, plus two explicit fixed-point-free consequences
+for `g=q*x` under the bad-point package.
