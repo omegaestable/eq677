@@ -7,6 +7,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Sequence
 
+from e677_api import MANIFEST_URL, configure_utf8_stdio, load_manifest as load_db_manifest
+
 try:
     import z3  # type: ignore[import-not-found]
 except ImportError as exc:  # pragma: no cover - exercised by users without z3
@@ -37,6 +39,19 @@ def left_rows_are_permutations(table: Table) -> bool:
     return all(set(row) == expected for row in table)
 
 
+def right_cancellative(table: Table) -> bool:
+    order = len(table)
+    for col in range(order):
+        values = {table[row][col] for row in range(order)}
+        if len(values) != order:
+            return False
+    return True
+
+
+def idempotent(table: Table) -> bool:
+    return all(table[x][x] == x for x in range(len(table)))
+
+
 def check_table(table: Table) -> tuple[bool, list[str]]:
     order = len(table)
     errors: list[str] = []
@@ -48,6 +63,30 @@ def check_table(table: Table) -> tuple[bool, list[str]]:
                 errors.append(f"E677 fails at x={x}, y={y}")
                 return False, errors
     return not errors, errors
+
+
+def classify_size_commentary(comment: str) -> str:
+    lowered = comment.lower()
+    first_line = lowered.strip().splitlines()[0] if lowered.strip() else ""
+    if (
+        first_line.startswith("no magma")
+        or first_line.startswith("no eq 677 magma")
+        or first_line.startswith("no eq677 magma")
+    ) and "currently known" not in first_line and "open" not in first_line:
+        return "empty"
+    if "open" in lowered or "currently known" in lowered or "no known" in lowered or "unknown" in lowered:
+        return "open"
+    return "note"
+
+
+def format_int_list(values: Sequence[int], limit: int = 40) -> str:
+    listed = list(values)
+    if not listed:
+        return "none"
+    rendered = ", ".join(str(value) for value in listed[:limit])
+    if len(listed) > limit:
+        rendered += ", ..."
+    return rendered
 
 
 def orbit_under_left(table: Table, x: int) -> list[int]:
@@ -150,6 +189,7 @@ class SearchConfig:
     term_equalities: tuple[tuple[str, str], ...]
     term_inequalities: tuple[tuple[str, str], ...]
     timeout_ms: int
+    require_bad_witness: bool
     require_left_permutations: bool
     require_label_injective: bool
     add_orbit_facts: bool
@@ -476,7 +516,7 @@ class E677Search:
                 == self.mul(x, self.mul(self.mul(node_x, x), node_x)),
                 group="period_uniform_u3_derived",
             )
-        if self.config.add_bad_point_lemmas and period >= 4:
+        if self.config.require_bad_witness and self.config.add_bad_point_lemmas and period >= 4:
             q = period - 2
             g = self.mul(q, x)
             self.add(
@@ -706,8 +746,9 @@ class E677Search:
         self.add_e677_constraints()
         if self.config.add_derived_identities:
             self.add_derived_identity_constraints()
-        self.add_bad_witness()
-        if self.config.add_bad_point_lemmas:
+        if self.config.require_bad_witness:
+            self.add_bad_witness()
+        if self.config.require_bad_witness and self.config.add_bad_point_lemmas:
             self.add_bad_point_lemmas()
         if self.config.add_collision_splitter:
             self.add_collision_splitter_constraints()
@@ -717,9 +758,10 @@ class E677Search:
         self.add_period_constraints()
         self.add_lx_complement_cycle_constraints()
         self.add_period_orbit_derived_constraints()
-        self.add_period_four_gate()
-        self.add_period_five_gate()
-        self.add_period_six_gate()
+        if self.config.require_bad_witness:
+            self.add_period_four_gate()
+            self.add_period_five_gate()
+            self.add_period_six_gate()
 
     def extract_table(self, model: z3.ModelRef) -> Table:
         return [
@@ -807,6 +849,8 @@ def print_validation(table: Table, witness: int) -> None:
             print(f"  {error}")
     failing = [x for x in range(len(table)) if not e255_at(table, x)]
     print(f"E255 failing witnesses: {failing}")
+    print(f"right cancellative: {right_cancellative(table)}")
+    print(f"idempotent: {idempotent(table)}")
     print(witness_summary(table, witness))
 
 
@@ -833,40 +877,65 @@ def search_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def existence_command(args: argparse.Namespace) -> int:
+    config = search_config_from_args(args, period=args.period, branch="any", require_bad_witness=False)
+    search = make_search(config)
+    result, table = search.run()
+    print(f"result: {result}")
+    if config.show_constraint_counts:
+        print("constraint groups:")
+        for group, count in search.constraint_counts.most_common():
+            print(f"  {group}: {count}")
+    if table is None:
+        if result == z3.unsat and config.track_groups:
+            core = search.minimized_group_unsat_core() if config.minimize_core else search.group_unsat_core()
+            label = "minimized unsat core groups" if config.minimize_core else "unsat core groups"
+            print(f"{label}:")
+            for group in core:
+                print(f"  {group}")
+        if result == z3.unknown:
+            print(f"reason: {search.solver.reason_unknown()}")
+        return 1 if result == z3.unsat else 2
+    print_validation(table, args.witness)
+    return 0
+
+
 def search_config_from_args(
     args: argparse.Namespace,
     period: int | None,
     branch: str,
     period4_external_cycle: str | None = None,
+    require_bad_witness: bool = True,
 ) -> SearchConfig:
     return SearchConfig(
         backend=args.backend,
         order=args.order,
-        witness=args.witness,
+        witness=getattr(args, "witness", 0),
         period=period,
         branch=branch,
-        period4_external_cycle=period4_external_cycle or args.period4_external_cycle,
-        period4_external_lx_cycle_size=args.period4_external_lx_cycle_size,
+        period4_external_cycle=period4_external_cycle or getattr(args, "period4_external_cycle", "any"),
+        period4_external_lx_cycle_size=getattr(args, "period4_external_lx_cycle_size", None),
         period5_branch=getattr(args, "period5_branch", "any"),
         period5_s_branch=getattr(args, "period5_s_branch", "any"),
-        lx_complement_cycles=args.lx_complement_cycles,
-        fixed_cells=tuple(args.fix_cell or ()),
+        lx_complement_cycles=getattr(args, "lx_complement_cycles", None),
+        fixed_cells=tuple(getattr(args, "fix_cell", None) or ()),
         fixed_terms=tuple(getattr(args, "fix_term", None) or ()),
         term_equalities=tuple(getattr(args, "eq_term", None) or ()),
         term_inequalities=tuple(getattr(args, "neq_term", None) or ()),
         timeout_ms=args.timeout_ms,
-        require_left_permutations=not args.no_left_permutations,
-        require_label_injective=not args.no_label_injective,
-        add_orbit_facts=not args.no_orbit_facts,
-        add_derived_identities=not args.no_derived_identities,
-        add_bad_point_lemmas=not args.no_bad_point_lemmas,
-        add_collision_splitter=not args.no_collision_splitter,
-        symmetry_break_bad_orbit=not args.no_symmetry_break_bad_orbit,
-        symmetry_break_period4_external=not args.no_symmetry_break_period4_external,
-        show_constraint_counts=args.show_constraint_counts,
-        track_groups=args.track_groups,
-        minimize_core=args.minimize_core,
-        core_check_timeout_ms=args.core_check_timeout_ms,
+        require_bad_witness=require_bad_witness,
+        require_left_permutations=not getattr(args, "no_left_permutations", False),
+        require_label_injective=not getattr(args, "no_label_injective", False),
+        add_orbit_facts=not getattr(args, "no_orbit_facts", False),
+        add_derived_identities=not getattr(args, "no_derived_identities", False),
+        add_bad_point_lemmas=require_bad_witness and not getattr(args, "no_bad_point_lemmas", False),
+        add_collision_splitter=not getattr(args, "no_collision_splitter", False),
+        symmetry_break_bad_orbit=not getattr(args, "no_symmetry_break_bad_orbit", False),
+        symmetry_break_period4_external=not getattr(args, "no_symmetry_break_period4_external", False),
+        show_constraint_counts=getattr(args, "show_constraint_counts", False),
+        track_groups=getattr(args, "track_groups", False),
+        minimize_core=getattr(args, "minimize_core", False),
+        core_check_timeout_ms=getattr(args, "core_check_timeout_ms", 5000),
     )
 
 
@@ -956,10 +1025,128 @@ def calibrate_linear_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def db_frontier_command(args: argparse.Namespace) -> int:
+    manifest = load_db_manifest(args.manifest)
+    magmas = manifest["magmas"]
+    if args.max_size < args.min_size:
+        raise ValueError("--max-size must be at least --min-size")
+
+    by_size = Counter(int(record["size"]) for record in magmas)
+    present_sizes = set(by_size)
+    size_commentary = {
+        int(item["size"]): str(item.get("comment", ""))
+        for item in manifest.get("size_commentary", [])
+        if isinstance(item, dict) and "size" in item
+    }
+    empty_sizes = sorted(
+        size
+        for size, comment in size_commentary.items()
+        if classify_size_commentary(comment) == "empty"
+    )
+    open_commentary_sizes = sorted(
+        size
+        for size, comment in size_commentary.items()
+        if classify_size_commentary(comment) == "open"
+    )
+    interval = range(args.min_size, args.max_size + 1)
+    interval_empty = [size for size in interval if size in empty_sizes]
+    interval_open_no_record = [
+        size
+        for size in interval
+        if size not in present_sizes and size not in empty_sizes
+    ]
+    interval_open_commentary = [
+        size
+        for size in interval
+        if size in open_commentary_sizes and size not in present_sizes
+    ]
+    check_sizes = sorted(set(interval_open_no_record + interval_open_commentary))
+
+    e255_failures = [record for record in magmas if record.get("satisfies_255") is False]
+    non_right_cancellative = [record for record in magmas if record.get("right_cancellative") is False]
+    non_rc_by_size = Counter(int(record["size"]) for record in non_right_cancellative)
+    interval_non_rc_sizes = sorted(size for size in non_rc_by_size if args.min_size <= size <= args.max_size)
+
+    print(f"database records: {manifest.get('count', len(magmas))}")
+    print(f"sizes with records: {format_int_list(sorted(present_sizes), args.list_limit)}")
+    print(f"records marked not satisfying E255: {len(e255_failures)}")
+    print(f"non-right-cancellative known positives: {len(non_right_cancellative)}")
+    print()
+    print("counterexample filter:")
+    print("  a bad E255 witness has a right column missing x, hence a finite counterexample is non-right-cancellative")
+    print("  right-cancellative database examples are calibration data, not plausible counterexample shapes")
+    print()
+    print(f"proved-empty sizes in {args.min_size}..{args.max_size}: {format_int_list(interval_empty, args.list_limit)}")
+    print(f"open/no-record sizes in {args.min_size}..{args.max_size}: {format_int_list(check_sizes, args.list_limit)}")
+    print(
+        f"known non-right-cancellative sizes in {args.min_size}..{args.max_size}: "
+        f"{format_int_list(interval_non_rc_sizes, args.list_limit)}"
+    )
+    if interval_non_rc_sizes:
+        print("top non-right-cancellative known-positive sizes:")
+        for size, count in non_rc_by_size.most_common(args.list_limit):
+            if args.min_size <= size <= args.max_size:
+                print(f"  size {size}: {count}")
+
+    if e255_failures:
+        print()
+        print("urgent database records marked as E255 failures:")
+        for record in sorted(e255_failures, key=lambda item: (int(item["size"]), str(item["canonical_hash"])))[: args.show_records]:
+            print(f"  size {record['size']} hash {str(record['canonical_hash'])[:16]} url={record.get('url')}")
+
+    if args.show_records and non_right_cancellative:
+        print()
+        print("non-right-cancellative examples to mine first:")
+        selected = sorted(non_right_cancellative, key=lambda item: (int(item["size"]), str(item["canonical_hash"])))
+        for record in selected[: args.show_records]:
+            print(
+                f"  size {record['size']} hash {str(record['canonical_hash'])[:16]} "
+                f"idempotent={record.get('idempotent')} url={record.get('url')}"
+            )
+
+    print()
+    print("recommended checks:")
+    if e255_failures:
+        record = sorted(e255_failures, key=lambda item: (int(item["size"]), str(item["canonical_hash"])))[0]
+        print(
+            "  verify the flagged record locally: "
+            f"& .\\.venv\\Scripts\\python.exe scripts\\e677_db_analyze.py analyze --hash-prefix {str(record['canonical_hash'])[:12]}"
+        )
+    if check_sizes:
+        for size in check_sizes[: args.recommend]:
+            print(
+                f"  size {size} existence: "
+                f"& .\\.venv\\Scripts\\python.exe scripts\\e677_z3_search.py existence --order {size} "
+                f"--timeout-ms {args.timeout_ms} --track-groups"
+            )
+            print(
+                f"  size {size} bad-witness sweep if existence is sat/unknown: "
+                f"& .\\.venv\\Scripts\\python.exe scripts\\e677_z3_search.py sweep --order {size} "
+                f"--timeout-ms {args.timeout_ms} --track-groups"
+            )
+    else:
+        print("  no open/no-record size appears in the selected range")
+    if interval_non_rc_sizes:
+        size = interval_non_rc_sizes[0]
+        print(
+            "  mine nearest non-right-cancellative positives: "
+            f"& .\\.venv\\Scripts\\python.exe scripts\\e677_db_analyze.py analyze --size {size} "
+            "--limit 5 --cache-dir run_logs\\database_cache"
+        )
+    return 2 if e255_failures else 0
+
+
 def positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be positive")
+    return parsed
+
+
+def nonnegative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be nonnegative")
     return parsed
 
 
@@ -1123,6 +1310,57 @@ def build_parser() -> argparse.ArgumentParser:
         help="per-check timeout for greedy core minimization; 0 means no separate limit",
     )
     search.set_defaults(func=search_command)
+
+    existence = subparsers.add_parser("existence", help="search for any finite E677 model, without a bad witness")
+    existence.add_argument("--backend", choices=["enum", "array"], default="enum", help="Z3 encoding backend")
+    existence.add_argument("--order", type=positive_int, required=True, help="finite carrier size")
+    add_common_summary_args(existence)
+    existence.add_argument("--period", type=positive_int, help="fix the diagnostic L_x orbit period for the witness label")
+    existence.add_argument(
+        "--lx-complement-cycles",
+        type=positive_int_tuple,
+        help="fix the cycle sizes of L_x on labels outside the chosen orbit, for example 3,2,1",
+    )
+    existence.add_argument(
+        "--fix-cell",
+        action="append",
+        type=fixed_cell,
+        help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
+    )
+    existence.add_argument(
+        "--fix-term",
+        action="append",
+        type=fixed_term,
+        help="add a term constraint such as q*x:5, a*q=7, or (q*x)*q:3; can be repeated",
+    )
+    existence.add_argument(
+        "--eq-term",
+        action="append",
+        type=term_equality,
+        help="add a term equality such as (a*q)*a=(q*q)*q; can be repeated",
+    )
+    existence.add_argument(
+        "--neq-term",
+        action="append",
+        type=term_inequality,
+        help="add a term inequality such as a*q!=q*q; can be repeated",
+    )
+    existence.add_argument("--timeout-ms", type=int, default=30000, help="Z3 timeout in milliseconds; 0 means none")
+    existence.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
+    existence.add_argument("--no-label-injective", action="store_true", help="do not add row-label injectivity constraints")
+    existence.add_argument("--no-orbit-facts", action="store_true", help="do not add trusted orbit recurrence facts")
+    existence.add_argument("--no-derived-identities", action="store_true", help="do not add transformed/key identity constraints")
+    existence.add_argument("--no-collision-splitter", action="store_true", help="do not add right-fiber splitter constraints")
+    existence.add_argument("--show-constraint-counts", action="store_true", help="print added constraint groups")
+    existence.add_argument("--track-groups", action="store_true", help="use group assumptions and print an UNSAT core")
+    existence.add_argument("--minimize-core", action="store_true", help="greedily minimize the group UNSAT core")
+    existence.add_argument(
+        "--core-check-timeout-ms",
+        type=int,
+        default=5000,
+        help="per-check timeout for greedy core minimization; 0 means no separate limit",
+    )
+    existence.set_defaults(func=existence_command)
 
     sweep = subparsers.add_parser("sweep", help="exhaustively check all witness periods for an order")
     sweep.add_argument("--backend", choices=["enum", "array"], default="enum", help="Z3 encoding backend")
@@ -1318,10 +1556,21 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--const", type=int, default=0, help="constant term")
     add_common_summary_args(calibrate)
     calibrate.set_defaults(func=calibrate_linear_command)
+
+    frontier = subparsers.add_parser("db-frontier", help="use the public database manifest to choose next checks")
+    frontier.add_argument("--manifest", default=MANIFEST_URL, help="manifest URL or local JSON path")
+    frontier.add_argument("--min-size", type=positive_int, default=1, help="first size to report")
+    frontier.add_argument("--max-size", type=positive_int, default=80, help="last size to report")
+    frontier.add_argument("--recommend", type=nonnegative_int, default=6, help="number of open sizes to turn into commands")
+    frontier.add_argument("--show-records", type=nonnegative_int, default=6, help="number of database records to print")
+    frontier.add_argument("--list-limit", type=positive_int, default=40, help="maximum length of printed size lists")
+    frontier.add_argument("--timeout-ms", type=int, default=120000, help="timeout to use in recommended sweep commands")
+    frontier.set_defaults(func=db_frontier_command)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

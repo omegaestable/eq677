@@ -12,8 +12,28 @@ implication. Start from `literature.tex`; use this file as the short operating p
 - Work as if the proof is local and reachable: start from the trusted package and try to close one named gate. Use public metadata only for labels and source cross-checks.
 - The unrestricted case is calibration: a finite proof should visibly use finiteness.
 - Computation posture: keep computation proof-directed. Source lookup and document compilation are always fine; broader searches should wait for a new structural lemma that makes them informative.
-- Current search posture: order `10`, period `4` is computationally closed.  The active disproof frontier is order `10`, periods `5` and `6`, using complement `L_x`-cycle partitions plus fixed-cell splits.
-- The broad order `10` run has also closed periods `8` and `9` as `unsat`; periods `5`, `6`, and `7` timed out in that broad run.
+- Current search posture: bad-witness searches are closed through order `9`.  At order
+  `10`, periods `4`, `5`, `6`, `8`, and `9` are closed; the broad frontier is periods
+  `7` and `10`.
+- Public database posture: the live manifest currently has `841` records, all marked
+  `satisfies_255=True`; `116` are non-right-cancellative positive examples.  Mine these
+  as near-miss calibration, not as proof.
+
+## Tooling Quickstart
+
+Use the repository virtualenv.
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py selftest
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze-file path\to\table.txt
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py manifest
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --hash-prefix d732efd172ca
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py db-frontier --max-size 40
+```
+
+`scripts/e677_db_analyze.py` has explicit authenticated write subcommands for `/submit`,
+comments, and display reorders.  They require `EQ677_API_TOKEN`; ordinary checking and
+frontier commands are read-only.
 
 ## Notation
 

@@ -232,3 +232,116 @@ Starter branch runs:
 
 The intent is to split only on named products that appear in the hand constraints, not on
 arbitrary table cells.
+
+## Public database implementation, 2026-05-20
+
+Added `scripts/e677_db_analyze.py`, a read-only analyzer for the public Equation 677
+database at `https://eq677.icarm.cloud/`.  It fetches the manifest, summarizes the known
+size/property frontier, and can download selected canonical tables for independent local
+checks of `E677`, `E255`, left-row bijectivity, right cancellation, idempotence,
+principal `L_x` orbit periods, and right-column collision fibers.
+
+Manifest summary:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py manifest
+```
+
+Analyze selected tables, optionally caching downloads:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --size 1 --limit 1
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --size 25 --limit 3 --cache-dir run_logs\database_cache
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --hash-prefix 48f0b800 --cache-dir run_logs\database_cache
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --size 671 --display-product 11,61 --cache-dir run_logs\database_cache
+```
+
+The live manifest smoke test currently reports 841 records, all marked
+`satisfies_255=True`; 725 are right-cancellative and 463 are idempotent.  The database
+also carries size-commentary entries such as nonexistence for sizes `2`, `3`, `4`, `6`,
+`8`, and `10`, plus open/commentary notes for larger sizes.  The analyzer is intended for
+mining structural patterns from known positive examples, not for authenticated submit or
+broad brute force.
+
+## Database-guided search harness update, 2026-05-20
+
+Updated `scripts/e677_z3_search.py` so the public database finding feeds back into the
+main search workflow.
+
+The new `db-frontier` command reads the manifest and reports which sizes are already
+proved empty, which sizes have records, which known examples are non-right-cancellative,
+and which open/no-record sizes deserve solver time next:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py db-frontier --max-size 40 --recommend 4 --show-records 4
+```
+
+The current first-pass answer is: skip `2,3,4,6,8,10`; for new small-size existence work,
+check `12` and `14` before moving to `15,17,18,...`; for structural mining, start with the
+known non-right-cancellative positive example at size `25`, then the size `49` examples.
+A finite counterexample cannot be right-cancellative, because a bad witness has a right
+column missing `x`, so the 116 non-right-cancellative database records are the useful
+near-miss calibration pool.
+
+The search harness also now has an `existence` mode for open sizes.  It searches for any
+finite `E677` model without imposing the bad-witness package; use this before a bad-witness
+sweep when the DB has no record for the size:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py existence --order 12 --timeout-ms 120000 --track-groups
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py sweep --order 12 --timeout-ms 120000 --track-groups
+```
+
+Extracted model diagnostics now also print right-cancellativity and idempotence, matching
+the public database metadata fields.
+
+## Size 671 database profile, 2026-05-20
+
+Size `671=11*61` has 16 database records.  All 16 are idempotent, satisfy `E677` and
+`E255`, and are non-right-cancellative.  The manifest comments identify them as
+Tao-style fiber-bundle constructions
+
+```text
+Tao(F_11,beta) x F_61(zeta,omega)
+beta in {5,9}, zeta in {9,20,34,58}, omega in {13,47}
+```
+
+The database analyzer now supports `--display-product base,fiber`, using the record's
+`display_reorder` field to profile product-coordinate structure.  For size `671`, exact
+profiling with `--display-product 11,61` shows an induced 11-point base operation
+
+```text
+a*b = 6(a+b) mod 11
+```
+
+and every fiber coordinate map is affine over `F_61`.  For each right column, exactly
+five whole `F_61` fibers collapse to single points and the remaining six fibers are
+bijective.  Equivalently each right column has image size `371`, with `366` singleton
+fibers and `5` fibers of size `61`; across a table this gives collision profile
+`{61: 3355}`.  The collapsed base pairs are exactly the five quadratic-nonresidue
+differences in `F_11`; residue differences and the diagonal use bijective fiber maps.
+
+This is a strong near-miss family for understanding non-right-cancellative positive
+examples, but it cannot itself contain a bad `E255` witness because the tables are
+idempotent, so every right column contains its own label via `x*x=x`.
+
+## Repo hardening pass, 2026-05-21
+
+Added `scripts/e677_api.py` as the shared public-database/API helper.  Read workflows use
+`GET /manifest.json` and `GET /magma/:hash/table.txt`; authenticated write helpers for
+`/submit`, comments, and display reorders are opt-in and require `EQ677_API_TOKEN`.
+
+Updated `scripts/e677_db_analyze.py` with safe UTF-8 output on Windows, an offline
+`selftest`, and an `analyze-file` command for local Cayley tables.  The Z3 frontier
+command now shares the same manifest loader and UTF-8 setup.  The live read-only smoke
+facts to check are:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py manifest
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py db-frontier --max-size 40
+& .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze --hash-prefix d732efd172ca
+```
+
+The corresponding current manifest facts are `841` records, all marked
+`satisfies_255=True`, with `116` non-right-cancellative positive examples and no database
+counterexample.

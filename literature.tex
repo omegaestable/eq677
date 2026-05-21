@@ -56,7 +56,71 @@ ETP input.  No right cancellation, associativity, identity element, or quasigrou
 structure is used.
 \end{abstract}
 
+\section{Current state roadmap}
+
+\paragraph{Status legend.}
+\emph{Local} means proved in this note from \(\E{677}\), finiteness, and left
+cancellation supplied by Proposition~\ref{prop:left-division}.  \emph{External} means
+input from the Equational Theories Project (ETP).  \emph{Computational} means a
+proof-directed finite search or public database check, useful as calibration but not a
+line-by-line proof.  \emph{Open} means a named gate whose closure would advance or finish
+the finite implication.
+
+\paragraph{One-line target.}
+For a fixed point \(x\), put
+\[
+a=x\op x,\qquad q=a\op x,\qquad p=x\backslash x.
+\]
+The finite implication is reduced locally to any one of the equivalent targets
+\[
+\begin{aligned}
+\EqAt{\E{255}}{x}
+&\Longleftrightarrow q\op x=x
+\Longleftrightarrow q\backslash x=x\\
+&\Longleftrightarrow ((x\op x)\op q)\op(x\op x)=x
+\Longleftrightarrow (q\op x)\op q=p.
+\end{aligned}
+\]
+
+\paragraph{Trusted local package.}
+The note proves finite left division, the transformed identity (T), the key identity
+(K), the unique right fixed-point witness, fixed-map equivalences, the principal
+\(L_x\)-orbit recurrence, the impossibility of periods \(2\) and \(3\), right-collision
+rectangles, and the current period-four gate.  In a bad finite counterexample at \(x\),
+the right column \(R_x\) misses \(x\), hence has a nontrivial collision fiber; on every
+such fiber the splitter \(t\mapsto t\op e\) is injective and satisfies the rectangle law
+\[
+(t\op e)\op t=e\backslash x.
+\]
+
+\paragraph{External and computational context.}
+ETP input says the unrestricted implication \(\E{677}\models\E{255}\) is false, so a
+finite proof must visibly use finiteness.  ETP also records the linear model families
+and the obstruction to affine-fiber counterexamples over positive linear bases.  The
+public Equation 677 database, checked live on 2026-05-21, contains \(841\) records, all
+marked as satisfying \(\E{255}\); \(116\) of these are non-right-cancellative positive
+examples and therefore the useful near-miss pool.  Solver evidence has closed all
+bad-witness searches through order \(9\), and at order \(10\) has closed periods \(4\),
+\(5\), \(6\), \(8\), and \(9\); the broad frontier remains periods \(7\) and \(10\).
+These searches guide the gates below but are not used as proof.
+
+\paragraph{Open gates.}
+The active route is to prove \(q\op x=x\).  The sharpest current gates are:
+the expert collision pullback \(a\op x=b\op x=e,\ a\neq b\Rightarrow e\op x=x\);
+the splitter-counting gate for a right collision fiber; the period-four external gate;
+and the period-five pruning gate.  All are stated precisely at the end of the note.
+
+\paragraph{Guardrails.}
+No argument below assumes right cancellation, associativity, an identity element,
+quasigroup or group structure, universal idempotence, the retired quotient family
+\(d_k\backslash x=c_{k-2}\op c_{k-1}\), or the retired full shift
+\(p\op d_k=d_{k+1}\).  Every cancellation is left cancellation by a proved bijective
+left translation.
+
 \section{Setup and finite tools}
+
+\emph{Status: local finite proof package, with the ETP warning in
+Remark~\ref{rem:external-guardrails} marked external.}
 
 A magma is a set with one binary operation \(\op\).  For \(u\in M\), write
 \[
@@ -103,7 +167,7 @@ left-cancel \(y\).  For (K), compare (T) with \(\E{677}\) using parameter \(y\op
 then left-cancel \(y\op z\).
 \end{proof}
 
-\begin{remark}[External ETP guardrails]
+\begin{remark}[External ETP guardrails]\label{rem:external-guardrails}
 The unrestricted implication \(\E{677}\models\E{255}\) is false in the free
 \(\E{677}\)-magma, so any proof must use finiteness.  Linear models satisfying
 \(\E{677}\) satisfy \(\E{255}\); affine-fiber extensions over them are ruled out by ETP
@@ -111,7 +175,50 @@ structure theory.  Finite \(\E{677}\)-magmas need not be right-cancellative
 \cite{ETP677}.
 \end{remark}
 
+\section{Examples and database calibration}
+
+\emph{Status: external ETP context plus computational/database calibration.  This section
+is not used as proof of the implication.}
+
+\begin{remark}[Linear and affine examples]
+The standard calibration examples are affine operations over finite fields,
+\[
+u\op v=\alpha u+\beta v+\gamma.
+\]
+The database includes Type I and Type II linear families described in the ETP material;
+for example, over \(\mathbb F_5\) the operation
+\[
+u\op v=2u-v
+\]
+satisfies \(\E{677}\) and \(\E{255}\).  Such examples are often right-cancellative and
+therefore cannot be bad finite counterexamples, because Proposition~\ref{prop:bad-point}
+forces a bad right column to miss \(x\).  ETP structure theory also rules out the
+straight affine-fiber extension route over positive linear bases, so useful construction
+work must be genuinely nonlinear in the fibers.
+\end{remark}
+
+\begin{remark}[Public database near-misses]
+The live public database \cite{Eq677Database} is best used as a source of
+positive examples and structural calibration.  The read endpoints are
+\(\texttt{/manifest.json}\) and \(\texttt{/magma/:hash/table.txt}\); authenticated write
+endpoints are documented at \(\texttt{/api}\).  The current manifest check reports
+\(841\) magmas, all marked \(\E{255}\)-positive, with \(116\) non-right-cancellative
+positive examples.
+
+The nearest non-right-cancellative positive example to mine is the size \(25\) record
+with hash prefix \(\texttt{d732efd172ca}\): it is idempotent, satisfies \(\E{677}\) and
+\(\E{255}\), is not right-cancellative, and has right-collision profile \(\{2:300\}\).
+Size \(49\) contributes non-idempotent non-right-cancellative positives.  Size
+\(671=11\cdot61\) contains Tao-style fiber-bundle examples; the local analyzer finds an
+induced \(11\)-point base operation and affine fiber maps over \(\mathbb F_{61}\), with
+whole collapsed fibers in selected right columns.  These examples show that
+non-right-cancellativity alone is far from a counterexample.
+\end{remark}
+
 \section{Local equivalences}
+
+\emph{Status: locally proved reductions from the global implication to the fixed-point
+gate \(q\op x=x\).}
 
 Fix a finite \(\E{677}\)-magma \(M\) and \(x\in M\).  Put
 \[
@@ -238,6 +345,8 @@ by \(y\) to obtain \(z=y\op u\).
 \end{proof}
 
 \section{Orbit facts}
+
+\emph{Status: locally proved orbit bookkeeping and the current period-four gate.}
 
 Define
 \[
@@ -530,7 +639,8 @@ give
 \[
 a\op t=p,\qquad t\op q=p.
 \]
-Also \(p\op a=q\).  Lemma~\ref{lem:division-trap}, applied with
+Also \(p\op a=q\), and \(a\op p=x\) follows from \(a\op r=x\) together with \(r=p\).
+Lemma~\ref{lem:division-trap}, applied with
 \[
 y=a,\qquad z=t,
 \qquad u=p,
@@ -624,6 +734,89 @@ At a bad point the displayed exclusions are Lemma~\ref{lem:bad-orbit-exclusions}
 
 \section{Collision and right-tail facts}
 
+\emph{Status: locally proved collision geometry.  Remark~\ref{rem:expert-collision-route}
+records an open expert-proposed pullback gate.}
+
+\begin{lemma}[Forward pair dynamics]\label{lem:phi-dynamics}
+Define
+\[
+\Phi(u,v)=\bigl(u\op v,\ (u\op(u\op v))\op u\bigr).
+\]
+If \(\Phi(u,v)=(p,q)\), then
+\[
+p\op q=v,\qquad
+\Phi(p,q)=\bigl(v,\ (p\op v)\op p\bigr).
+\]
+Consequently every forward \(\Phi\)-orbit can be written as
+\[
+\Phi^n(u,v)=(\alpha_n,\alpha_{n+2}),
+\qquad
+\alpha_n\op\alpha_{n+2}=\alpha_{n+1}
+\]
+for all \(n\ge0\), after setting
+\[
+\alpha_0=u,\qquad \alpha_2=v,\qquad
+\alpha_1=u\op v,\qquad
+\alpha_3=(u\op(u\op v))\op u.
+\]
+\end{lemma}
+\begin{proof}
+\cert If \(p=u\op v\) and \(q=(u\op(u\op v))\op u\), then (T) with
+\((y,z)=(u,v)\) gives
+\[
+v=(u\op v)\op((u\op(u\op v))\op u)=p\op q.
+\]
+Therefore
+\[
+\Phi(p,q)=\bigl(p\op q,\ (p\op(p\op q))\op p\bigr)
+          =\bigl(v,\ (p\op v)\op p\bigr).
+\]
+The displayed recurrence follows by applying the same calculation inductively to each
+successive pair in the forward orbit.
+\end{proof}
+
+\begin{remark}[Expert collision route]\label{rem:expert-collision-route}
+The expert input proposes the following finite collision lemma as the final fixed-point
+gate:
+\[
+\boxed{
+a\op x=b\op x=e,\quad a\neq b
+\quad\Longrightarrow\quad
+e\op x=x.}
+\tag{C}
+\]
+If (C) is proved, then the finite implication follows immediately.  Indeed, if
+\(\EqAt{\E{255}}{x}\) fails, Proposition~\ref{prop:unique-witness} gives no solution to
+\(u\op x=x\).  Thus \(x\notin\operatorname{im}R_x\), so finiteness makes \(R_x\)
+non-injective.  Choose \(a\neq b\) with \(a\op x=b\op x=e\).  Then (C) supplies
+\(e\op x=x\), contradicting the missing right fixed point over \(x\).
+
+The algebraic reduction behind (C) is already aligned with the identities above.  From
+(T), first with \((y,z)=(a,x)\) and then with \((y,z)=(b,x)\),
+\[
+x=e\op((a\op e)\op a)=e\op((b\op e)\op b).
+\]
+Left cancellation by \(e\) gives a common element
+\[
+t=(a\op e)\op a=(b\op e)\op b,\qquad e\op t=x,
+\]
+and hence
+\[
+\Phi(a,x)=\Phi(b,x)=(e,t).
+\]
+Thus (C) is equivalent, for this collision, to ruling out \(t\neq x\).
+Lemma~\ref{lem:phi-dynamics} supplies the proposed finite engine: if \(t\neq x\), the
+forward \(\Phi\)-orbit of \((e,t)\) eventually repeats, and the intended last step is to
+pull the first repeated pair backwards along
+\[
+\alpha_n\op\alpha_{n+2}=\alpha_{n+1}
+\]
+until it reaches the two predecessors \((a,x)\) and \((b,x)\).  This is now the exact
+audit point: the pullback must be justified using only proved left cancellation, never
+right cancellation by the second coordinate.  Once that finite pullback is formalized,
+(C) closes the proof of \(\E{677}\models_{\fin}\E{255}\).
+\end{remark}
+
 \begin{proposition}[Collision lift]\label{prop:collision-lift}
 If \(d_i=d_j=e\), then
 \[
@@ -715,6 +908,9 @@ It also says that \(y\op r=z\op r\) would force \(y=z\), so
 \end{proof}
 
 \section{Stress-tested candidate structures}
+
+\emph{Status: local consequences and computationally motivated pruning ledger.  Surviving
+items are not asserted to extend to finite magmas.}
 
 A candidate structure in this section is only a partial local diagram around a bad point
 \(x\).  It is not asserted to extend to a finite magma unless explicitly stated.  The
@@ -970,6 +1166,8 @@ return to the period-four external elements \(r\) and \(s\).
 
 \section{Bad-point checklist and open gates}
 
+\emph{Status: local bad-point package followed by open gates.}
+
 \begin{proposition}[Bad-point package]\label{prop:bad-point}
 If \(\EqAt{\E{255}}{x}\) fails, then:
 \begin{enumerate}
@@ -1043,10 +1241,25 @@ paper is left cancellation by a proved bijective left translation.
 \text{No right cancellation. No associativity. No identity element.}\\
 \text{No universal idempotence. No global ``\(H_x\) has no cycles''.}\\
 \text{Do not use } d_k\backslash x=c_{k-2}\op c_{k-1}.\\
-\text{Do not use } p\op d_k=d_{k+1}\text{ unless freshly proved.}
+\text{Do not use } p\op d_k=d_{k+1}\text{ unless freshly proved.}\\
+\text{Do not pull back a \(\Phi\)-repeat by cancelling a right coordinate.}
 \end{gathered}}
 \]
 \end{remark}
+
+\begin{target}[Expert collision gate]\label{target:expert-collision}
+Complete the finite pullback step in Remark~\ref{rem:expert-collision-route}: prove that
+if
+\[
+a\op x=b\op x=e,\qquad a\neq b,
+\]
+then \(e\op x=x\).  Equivalently, with
+\[
+t=(a\op e)\op a=(b\op e)\op b,\qquad e\op t=x,
+\]
+rule out \(t\neq x\) by the finite \(\Phi\)-orbit recurrence from
+Lemma~\ref{lem:phi-dynamics}.
+\end{target}
 
 \begin{target}[Fixed-point gate]
 Prove \(q\op x=x\), equivalently Lemma L or \((q\op x)\op q=p\), with a visible finite
@@ -1085,6 +1298,11 @@ at scale.
 Equational Theories Project.
 \newblock Dashboard.
 \newblock \url{https://teorth.github.io/equational_theories/dashboard/}.
+
+\bibitem{Eq677Database}
+ICARM.
+\newblock Equation 677 Database.
+\newblock \url{https://eq677.icarm.cloud/}.
 
 \bibitem{ETP677}
 Equational Theories Project.

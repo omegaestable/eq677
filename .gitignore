@@ -3,3 +3,6 @@ __pycache__/
 run_logs/
 flamegraph.svg
 *.synctex.gz
+*.aux
+*.log
+*.out
