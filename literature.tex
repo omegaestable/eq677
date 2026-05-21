@@ -210,6 +210,33 @@ If \(q\op x\neq x\), Proposition~\ref{prop:unique-witness} says that no right fi
 point over \(x\) exists, so neither \(F_x\) nor \(H_x\) has a fixed point.
 \end{proof}
 
+\begin{lemma}[Division return trap]\label{lem:division-trap}
+For all \(y,z\), put
+\[
+u=y\op z,\qquad v=u\op y.
+\]
+Then
+\[
+v=z\backslash(y\backslash z),\qquad y\backslash z=z\op v. \tag{D}
+\]
+Consequently, if also \(z\op v=u\), then
+\[
+z=y\op u.
+\]
+\end{lemma}
+\begin{proof}
+\cert The formula for \(y\backslash z\) is just the left-division form of \(\E{677}\):
+\[
+y\backslash z=z\op((y\op z)\op y)=z\op v.
+\]
+Left-dividing this equality by \(z\) gives
+\[
+v=z\backslash(y\backslash z).
+\]
+If \(z\op v=u\), then the displayed identity gives \(y\backslash z=u\).  Left-multiply
+by \(y\) to obtain \(z=y\op u\).
+\end{proof}
+
 \section{Orbit facts}
 
 Define
@@ -320,6 +347,29 @@ Using (D3.4) and \(x\op a=p\), left cancellation by \(x\) gives \(a\op a=a\).  T
 on a period-three orbit.
 \end{proof}
 
+\begin{lemma}[Bad orbit-edge exclusions]\label{lem:bad-orbit-exclusions}
+Assume \(\EqAt{\E{255}}{x}\) fails.  Then for every \(k\),
+\[
+d_k=c_k\op x\notin\{x,c_{k-1}\},
+\]
+or equivalently
+\[
+c_k\op x\neq x,
+\qquad
+x\op(c_k\op x)\neq c_k.
+\]
+\end{lemma}
+\begin{proof}
+\cert The first exclusion is Proposition~\ref{prop:unique-witness}: under failure, no
+element \(u\) satisfies \(u\op x=x\).  If \(d_k=c_{k-1}\), then
+\[
+H_x(c_{k-1})=((x\op c_{k-1})\op x)=c_k\op x=d_k=c_{k-1},
+\]
+contradicting the fixed-point-free conclusion of Lemma~\ref{lem:fixed-map}.  Since
+\(x\op c_{k-1}=c_k\), left cancellation by \(x\) makes \(d_k\neq c_{k-1}\) equivalent
+to \(x\op d_k\neq c_k\).
+\end{proof}
+
 \begin{lemma}[Uniform orbit-edge identities]\label{lem:uniform-orbit}
 For all \(k\),
 \[
@@ -381,11 +431,16 @@ q\op a=q,\qquad s=(q\op q)\op q=a\op(q\op q),\qquad s\notin\{x,a,q\},
 \[
 H_x(a)=p,\qquad H_x(p)=a.
 \]
-If \(\EqAt{\E{255}}{x}\) fails and \(d=4\), at least one of
+If \(\EqAt{\E{255}}{x}\) fails and \(d=4\), then either
 \[
-q\op x,\qquad p\op x,\qquad q\op q
+q\op x\notin\{x,a,q,p\},
 \]
-lies outside \(\{x,a,q,p\}\).
+or
+\[
+q\op x=p\qquad\text{and}\qquad p\op x\notin\{x,a,q,p\}.
+\]
+In particular, at least one of \(q\op x\) and \(p\op x\) lies outside
+\(\{x,a,q,p\}\).
 \end{proposition}
 \begin{proof}
 \cert The \(L_x\)-orbit identities give
@@ -469,16 +524,24 @@ H_x(p)=((x\op p)\op x)=x\op x=a.
 
 If \(\EqAt{\E{255}}{x}\) fails, then \(r=q\op x\neq x\).  The preceding exclusions give
 either \(r\notin\{x,a,q,p\}\), in which case we are done, or \(r=p\).  In the latter
-case, if \(s=p\op x\notin\{x,a,q,p\}\), we are done.  The only remaining possibility is
-\(r=p\) and \(s=p\).  Then (P4.2) and (P4.3) give
+case the exclusions above already give \(s=p\op x\notin\{x,a,q\}\).  It remains only
+to exclude \(s=p\).  Suppose \(s=p\), and put \(t=q\op q\).  Then (P4.2) and (P4.3)
+give
 \[
-a\op(q\op q)=p,\qquad (q\op q)\op q=p. \tag{P4.4}
+a\op t=p,\qquad t\op q=p.
 \]
-Put \(t=q\op q\).  If \(t=x\), then \(a\op t=a\op x=q\), contradicting
-\(a\op t=p\).  If \(t=a\), then (P4.4) gives \(a\op a=p=a\op q\), so left cancellation by
-\(a\) gives \(a=q\).  If \(t=q\), then \(t\op q=q\op q=t=q\), contradicting
-\(t\op q=p\).  If \(t=p\), then \(a\op t=a\op p=x\), contradicting \(a\op t=p\).
-Thus \(q\op q\notin\{x,a,q,p\}\).
+Also \(p\op a=q\).  Lemma~\ref{lem:division-trap}, applied with
+\[
+y=a,\qquad z=t,
+\qquad u=p,
+\qquad v=q,
+\]
+therefore gives
+\[
+t=a\op p=x.
+\]
+But then \(p=a\op t=a\op x=q\), contradicting the distinctness of \(p\) and \(q\) on
+the period-four orbit.  Hence \(s\neq p\), and so \(s\notin\{x,a,q,p\}\).
 \end{proof}
 
 \begin{proposition}[Period-five and period-six first data]\label{prop:p5p6}
@@ -495,7 +558,10 @@ g=a\op((b\op a)\op b),\quad
 q\op((a\op q)\op a)=x,\quad
 (a\op q)\op a=x\op(g\op q),
 \]
-and at a bad point \(g\notin\{x,b\}\).
+and at a bad point
+\[
+b\op x\notin\{x,a\},\qquad g\notin\{x,b\},\qquad p\op x\notin\{x,q\}.
+\]
 
 If \(d=6\), write
 \[
@@ -511,7 +577,11 @@ h=a\op((b\op a)\op b),\quad g=b\op((c\op b)\op c),
 \[
 q\op((a\op q)\op a)=x,\quad (a\op q)\op a=x\op(g\op q),
 \]
-and at a bad point \(g\neq x\).
+and at a bad point
+\[
+b\op x\notin\{x,a\},\qquad h\notin\{x,b\},\qquad
+g\notin\{x,c\},\qquad p\op x\notin\{x,q\}.
+\]
 \end{proposition}
 \begin{proof}
 \cert Suppose first that \(d=5\).  Then \(q=c_{d-2}=c_3\) and \(p=c_{d-1}=c_4\), so
@@ -531,11 +601,8 @@ and (U3) at \(k=1\) gives
 (a\op q)\op a=x\op((q\op x)\op q)=x\op(g\op q).
 \]
 At a bad point, \(g=x\) would be \(q\op x=x\), contrary to the equivalence in
-Proposition~\ref{prop:unique-witness}; and \(g=b\) would make
-\[
-H_x(b)=((x\op b)\op x)=q\op x=g=b,
-\]
-contrary to Lemma~\ref{lem:fixed-map}.
+Proposition~\ref{prop:unique-witness}; the remaining exclusions are exactly
+Lemma~\ref{lem:bad-orbit-exclusions} at \(k=2,3,4\).
 
 The \(d=6\) case is the same calculation with \(q=c_4\) and \(p=c_5\).  Thus
 \[
@@ -551,8 +618,8 @@ By (U2) and (U3) at \(k=1\),
 q\op((a\op q)\op a)=x,\qquad
 (a\op q)\op a=x\op((q\op x)\op q)=x\op(g\op q).
 \]
-At a bad point \(g\neq x\), again by the equivalence in
-Proposition~\ref{prop:unique-witness}.
+At a bad point the displayed exclusions are Lemma~\ref{lem:bad-orbit-exclusions} at
+\(k=2,3,4,5\).
 \end{proof}
 
 \section{Collision and right-tail facts}
@@ -657,7 +724,7 @@ If \(\EqAt{\E{255}}{x}\) fails, then:
 \item \(R_x\) has a canonical nontrivial collision fiber from Lemma~\ref{lem:right-tail};
 \item on a fiber \(R_x^{-1}(e)\) as above, \(t\mapsto t\op e\) is injective and obeys (R);
 \item \(H_x\) and \(F_x\) are fixed-point-free;
-\item if \(d=4\), some one of \(q\op x,p\op x,q\op q\) is outside \(\{x,a,q,p\}\).
+\item if \(d=4\), some one of \(q\op x,p\op x\) is outside \(\{x,a,q,p\}\).
 \end{enumerate}
 \end{proposition}
 \begin{proof}
@@ -701,13 +768,11 @@ q\op x\neq x
 d=4
 &\Longrightarrow& q\op x\in\{p\}\cup(M\setminus\{x,a,q,p\}),\\[1mm]
 d=4,\ q\op x=p
-&\Longrightarrow& p\op x\notin\{x,a,q\},\\[1mm]
-d=4,\ q\op x=p,\ p\op x=p
-&\Longrightarrow& q\op q\notin\{x,a,q,p\}.
+&\Longrightarrow& p\op x\notin\{x,a,q,p\}.
 \end{array}
 \]
-So a bad period-four point always creates an external product.  No four-element
-principal-orbit-only bad point survives these facts.
+So a bad period-four point exits the principal orbit along the right tail by the step
+\(p\op x\).  No four-element principal-orbit-only bad point survives these facts.
 \end{remark}
 
 \begin{remark}[Finite facts used, nothing else]
@@ -743,7 +808,7 @@ contradiction.
 \begin{target}[Period-four external gate]
 At a bad period-four point, feed the forced external element among
 \[
-q\op x,\qquad p\op x,\qquad q\op q
+q\op x,\qquad p\op x
 \]
 back into the fixed-point gate or the splitter gate.
 \end{target}
