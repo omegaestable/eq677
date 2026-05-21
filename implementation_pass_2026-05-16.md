@@ -165,3 +165,70 @@ cyclically as `e_i -> e_{i+1}`, the solver adds `e_i*(e_{i+1}*x)=e_{i-1}` for ev
 position.  The searcher also adds period-uniform ground instances of the transformed and
 key identities along the principal orbit, plus two explicit fixed-point-free consequences
 for `g=q*x` under the bad-point package.
+
+## Implementation start, 2026-05-20
+
+Added two small pieces aimed at the remaining branch frontier.
+
+First, the period-derived orbit package now records the uniform identity
+
+```text
+(c_k*(c_k*x))*c_k = x*(((c_k*x)*x)*(c_k*x))
+```
+
+for every labeled point `c_k` on the principal `L_x` orbit.  This is the `U3` identity
+from `literature.tex`; it was already implied when the global derived identities were
+enabled, but having it in the period-specific package keeps the important local instance
+available during debugging runs with `--no-derived-identities`.
+
+Second, the searcher now supports term constraints and recursive term splits:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py search --order 10 --period 7 --fix-term "q*x=5"
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py split --order 10 --period 7 --lx-complement-cycles 3 --fix-term "q*x=5" --split-term "a*q" --timeout-ms 60000
+```
+
+Recognized term atoms include `x`, `a`, `b`, `c`, `q`, `p`, `g`/`r` for `q*x`, `s` for
+`p*x`, `h` for `(q*x)*q`, `t` for `q*a`, `u` for `x*(q*x)`, and orbit labels `c0`,
+`c1`, ... .  Products and parentheses are accepted, so terms such as `(q*x)*q` and
+`g*q` can be used directly.  Quote term arguments in PowerShell.
+
+## Period-five branch implementation, 2026-05-20
+
+Added branch-directed presets for the period-five internal pruning route.  The searcher
+now accepts
+
+```powershell
+--period5-branch any|internal|external|g=q|g=a|g=p
+--period5-s-branch any|internal|external|s=a|s=b|s=p
+```
+
+The `s` branch is only meaningful with `--period5-branch g=p`, where `s=p*x`.  The
+presets encode the splitter obligations from `literature.tex`:
+
+```text
+g=q: b*q=a, (a*q)*a=(q*q)*q, a*q!=q*q
+g=a: b*a=a, (q*a)*q=b*x, q*a!=b
+g=p: b*p=a, q*(p*x)=b, p*x notin {x,q}
+s=a: q*a=b, q*p=b*x
+s=b: q*b=b
+s=p: q*p=b, b*q=(p*p)*p, q*p!=p*p
+```
+
+The searcher also now supports term-to-term constraints:
+
+```powershell
+--eq-term "(a*q)*a=(q*q)*q"
+--neq-term "a*q!=q*q"
+```
+
+Starter branch runs:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py search --order 10 --period 5 --period5-branch "g=q" --timeout-ms 60000 --track-groups
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py search --order 10 --period 5 --period5-branch "g=a" --timeout-ms 60000 --track-groups
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py split --order 10 --period 5 --period5-branch "g=p" --period5-s-branch internal --split-term "a*q" --split-term "g*q" --timeout-ms 60000
+```
+
+The intent is to split only on named products that appear in the hand constraints, not on
+arbitrary table cells.

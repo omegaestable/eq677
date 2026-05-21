@@ -142,8 +142,13 @@ class SearchConfig:
     branch: str
     period4_external_cycle: str
     period4_external_lx_cycle_size: int | None
+    period5_branch: str
+    period5_s_branch: str
     lx_complement_cycles: tuple[int, ...] | None
     fixed_cells: tuple[tuple[int, int, int], ...]
+    fixed_terms: tuple[tuple[str, int], ...]
+    term_equalities: tuple[tuple[str, str], ...]
+    term_inequalities: tuple[tuple[str, str], ...]
     timeout_ms: int
     require_left_permutations: bool
     require_label_injective: bool
@@ -157,6 +162,51 @@ class SearchConfig:
     track_groups: bool
     minimize_core: bool
     core_check_timeout_ms: int
+
+
+class TermParser:
+    def __init__(self, search: E677Search, tokens: list[str]):  # type: ignore[name-defined]
+        self.search = search
+        self.tokens = tokens
+        self.position = 0
+
+    def has_remaining_tokens(self) -> bool:
+        return self.position < len(self.tokens)
+
+    def peek(self) -> str | None:
+        if self.has_remaining_tokens():
+            return self.tokens[self.position]
+        return None
+
+    def take(self) -> str:
+        token = self.peek()
+        if token is None:
+            raise ValueError("unexpected end of term")
+        self.position += 1
+        return token
+
+    def parse_expression(self) -> z3.ExprRef:
+        parsed = self.parse_factor()
+        while self.peek() == "*":
+            self.take()
+            parsed = self.search.mul(parsed, self.parse_factor())
+        return parsed
+
+    def parse_factor(self) -> z3.ExprRef:
+        token = self.take()
+        if token == "(":
+            parsed = self.parse_expression()
+            if self.take() != ")":
+                raise ValueError("unbalanced parentheses in term")
+            return parsed
+        if token == ")" or token == "*":
+            raise ValueError(f"unexpected token in term: {token!r}")
+        if token.isdecimal():
+            value = int(token)
+            if value >= self.search.order:
+                raise ValueError("numeric term labels must be less than --order")
+            return self.search.as_expr(value)
+        return self.search.named_term_expr(token)
 
 
 class E677Search:
@@ -210,6 +260,64 @@ class E677Search:
             if row >= self.order or col >= self.order or value >= self.order:
                 raise ValueError("fixed cell entries must be less than --order")
             self.add(self.mul(row, col) == self.as_expr(value), group="fixed_cells")
+
+    def add_fixed_term_constraints(self) -> None:
+        for term, value in self.config.fixed_terms:
+            if value >= self.order:
+                raise ValueError("fixed term values must be less than --order")
+            self.add(self.term_expr(term) == self.as_expr(value), group="fixed_terms")
+
+    def add_term_relation_constraints(self) -> None:
+        for left, right in self.config.term_equalities:
+            self.add(self.term_expr(left) == self.term_expr(right), group="term_equalities")
+        for left, right in self.config.term_inequalities:
+            self.add(self.term_expr(left) != self.term_expr(right), group="term_inequalities")
+
+    def term_expr(self, term: str) -> z3.ExprRef:
+        tokens = re.findall(r"\d+|[A-Za-z_][A-Za-z0-9_]*|[()*]", term)
+        if not tokens or "".join(tokens) != re.sub(r"\s+", "", term):
+            raise ValueError(f"could not parse term {term!r}")
+        parser = TermParser(self, tokens)
+        parsed = parser.parse_expression()
+        if parser.has_remaining_tokens():
+            raise ValueError(f"unexpected token in term {term!r}: {parser.peek()!r}")
+        return parsed
+
+    def named_term_expr(self, name: str) -> z3.ExprRef:
+        witness = self.config.witness
+        witness_expr = self.as_expr(witness)
+        orbit_match = re.fullmatch(r"c(\d+)", name)
+        if orbit_match:
+            index = int(orbit_match.group(1))
+            current = witness_expr
+            for _ in range(index):
+                current = self.mul(witness_expr, current)
+            return current
+
+        a_expr = self.mul(witness_expr, witness_expr)
+        b_expr = self.mul(witness_expr, a_expr)
+        c_expr = self.mul(witness_expr, b_expr)
+        q_expr = self.mul(a_expr, witness_expr)
+        p_expr = self.mul(witness_expr, q_expr)
+        r_expr = self.mul(q_expr, witness_expr)
+
+        named_terms = {
+            "x": witness_expr,
+            "a": a_expr,
+            "b": b_expr,
+            "c": c_expr,
+            "q": q_expr,
+            "p": p_expr,
+            "g": r_expr,
+            "r": r_expr,
+            "s": self.mul(p_expr, witness_expr),
+            "h": self.mul(r_expr, q_expr),
+            "t": self.mul(q_expr, a_expr),
+            "u": self.mul(witness_expr, r_expr),
+        }
+        if name not in named_terms:
+            raise ValueError(f"unknown term name {name!r}")
+        return named_terms[name]
 
     def add_left_permutation_constraints(self) -> None:
         for row in range(self.order):
@@ -363,6 +471,11 @@ class E677Search:
                 == self.mul(node, self.mul(self.mul(next_node, node), next_node)),
                 group="period_key_orbit_derived",
             )
+            self.add(
+                self.mul(self.mul(node, node_x), node)
+                == self.mul(x, self.mul(self.mul(node_x, x), node_x)),
+                group="period_uniform_u3_derived",
+            )
         if self.config.add_bad_point_lemmas and period >= 4:
             q = period - 2
             g = self.mul(q, x)
@@ -475,6 +588,10 @@ class E677Search:
 
     def add_period_five_gate(self) -> None:
         if self.config.period != 5:
+            if self.config.period5_branch != "any":
+                raise ValueError("period-five branch constraints require --period 5")
+            if self.config.period5_s_branch != "any":
+                raise ValueError("period-five s-branch constraints require --period 5 --period5-branch g=p")
             return
         x, a, b, q, p = 0, 1, 2, 3, 4
         g = self.mul(q, x)
@@ -489,6 +606,79 @@ class E677Search:
         self.add(g != self.as_expr(x), group="period5_derived")
         if self.config.add_bad_point_lemmas:
             self.add(g != self.as_expr(b), group="period5_derived_bad_point")
+        self.add_period_five_branch_constraints()
+
+    def add_period_five_branch_constraints(self) -> None:
+        x, a, b, q, p = 0, 1, 2, 3, 4
+        g = self.mul(q, x)
+        s = self.mul(p, x)
+        aq = self.mul(a, q)
+        qa = self.mul(q, a)
+        qq = self.mul(q, q)
+        qp = self.mul(q, p)
+        pp = self.mul(p, p)
+        bx = self.mul(b, x)
+
+        branch = self.config.period5_branch
+        if branch == "internal":
+            self.add(z3.Or(g == self.as_expr(a), g == self.as_expr(q), g == self.as_expr(p)), group="period5_branch_internal")
+        elif branch == "external":
+            self.add(
+                g != self.as_expr(x),
+                g != self.as_expr(a),
+                g != self.as_expr(b),
+                g != self.as_expr(q),
+                g != self.as_expr(p),
+                group="period5_branch_external",
+            )
+        elif branch == "g=q":
+            self.add(g == self.as_expr(q), group="period5_branch_g_eq_q")
+            self.add(self.mul(b, q) == self.as_expr(a), group="period5_branch_g_eq_q")
+            self.add(self.mul(aq, a) == self.mul(qq, q), group="period5_branch_g_eq_q_splitter")
+            self.add(aq != qq, group="period5_branch_g_eq_q_splitter")
+        elif branch == "g=a":
+            self.add(g == self.as_expr(a), group="period5_branch_g_eq_a")
+            self.add(self.mul(b, a) == self.as_expr(a), group="period5_branch_g_eq_a")
+            self.add(self.mul(qa, q) == bx, group="period5_branch_g_eq_a_splitter")
+            self.add(qa != self.as_expr(b), group="period5_branch_g_eq_a_splitter")
+        elif branch == "g=p":
+            self.add(g == self.as_expr(p), group="period5_branch_g_eq_p")
+            self.add(self.mul(b, p) == self.as_expr(a), group="period5_branch_g_eq_p")
+            self.add(self.mul(q, s) == self.as_expr(b), group="period5_branch_g_eq_p")
+            self.add(s != self.as_expr(x), s != self.as_expr(q), group="period5_branch_g_eq_p")
+        elif branch != "any":
+            raise ValueError(f"unknown period-five branch {branch!r}")
+
+        s_branch = self.config.period5_s_branch
+        if s_branch == "any":
+            return
+        if branch != "g=p":
+            raise ValueError("--period5-s-branch requires --period5-branch g=p")
+        if s_branch == "internal":
+            self.add(z3.Or(s == self.as_expr(a), s == self.as_expr(b), s == self.as_expr(p)), group="period5_s_branch_internal")
+        elif s_branch == "external":
+            self.add(
+                s != self.as_expr(x),
+                s != self.as_expr(a),
+                s != self.as_expr(b),
+                s != self.as_expr(q),
+                s != self.as_expr(p),
+                group="period5_s_branch_external",
+            )
+        elif s_branch == "s=a":
+            self.add(s == self.as_expr(a), group="period5_s_branch_s_eq_a")
+            self.add(qa == self.as_expr(b), group="period5_s_branch_s_eq_a")
+            self.add(qp == bx, group="period5_s_branch_s_eq_a_splitter")
+        elif s_branch == "s=b":
+            self.add(s == self.as_expr(b), group="period5_s_branch_s_eq_b")
+            self.add(self.mul(q, b) == self.as_expr(b), group="period5_s_branch_s_eq_b")
+        elif s_branch == "s=p":
+            self.add(s == self.as_expr(p), group="period5_s_branch_s_eq_p")
+            self.add(qp == self.as_expr(b), group="period5_s_branch_s_eq_p")
+            self.add(self.mul(b, q) == self.mul(pp, p), group="period5_s_branch_s_eq_p_splitter")
+            self.add(qp != pp, group="period5_s_branch_s_eq_p_splitter")
+        else:
+            raise ValueError(f"unknown period-five s-branch {s_branch!r}")
 
     def add_period_six_gate(self) -> None:
         if self.config.period != 6:
@@ -522,6 +712,8 @@ class E677Search:
         if self.config.add_collision_splitter:
             self.add_collision_splitter_constraints()
         self.add_fixed_cell_constraints()
+        self.add_fixed_term_constraints()
+        self.add_term_relation_constraints()
         self.add_period_constraints()
         self.add_lx_complement_cycle_constraints()
         self.add_period_orbit_derived_constraints()
@@ -655,8 +847,13 @@ def search_config_from_args(
         branch=branch,
         period4_external_cycle=period4_external_cycle or args.period4_external_cycle,
         period4_external_lx_cycle_size=args.period4_external_lx_cycle_size,
+        period5_branch=getattr(args, "period5_branch", "any"),
+        period5_s_branch=getattr(args, "period5_s_branch", "any"),
         lx_complement_cycles=args.lx_complement_cycles,
         fixed_cells=tuple(args.fix_cell or ()),
+        fixed_terms=tuple(getattr(args, "fix_term", None) or ()),
+        term_equalities=tuple(getattr(args, "eq_term", None) or ()),
+        term_inequalities=tuple(getattr(args, "neq_term", None) or ()),
         timeout_ms=args.timeout_ms,
         require_left_permutations=not args.no_left_permutations,
         require_label_injective=not args.no_label_injective,
@@ -680,7 +877,10 @@ def make_search(config: SearchConfig) -> E677Search:
 
 def sweep_command(args: argparse.Namespace) -> int:
     any_unknown = False
-    for period in range(args.start_period, args.order + 1):
+    periods: Sequence[int] = range(args.start_period, args.order + 1)
+    if args.period5_branch != "any" or args.period5_s_branch != "any":
+        periods = [5] if args.start_period <= 5 <= args.order else []
+    for period in periods:
         branches = ["r=p", "external"] if period == 4 else ["any"]
         for branch in branches:
             label = f"period={period}" if branch == "any" else f"period={period}, branch={branch}"
@@ -697,6 +897,57 @@ def sweep_command(args: argparse.Namespace) -> int:
                 any_unknown = True
                 print(f"reason: {search.solver.reason_unknown()}")
     return 2 if any_unknown else 0
+
+
+def split_command(args: argparse.Namespace) -> int:
+    split_terms: list[str] = args.split_term or []
+    base_fixed_terms = list(args.fix_term or [])
+    summary: Counter[str] = Counter()
+    found_sat = False
+    found_unknown = False
+
+    def run_leaf(fixed_terms: list[tuple[str, int]], labels: list[str]) -> bool:
+        nonlocal found_sat, found_unknown
+        branch_args = argparse.Namespace(**vars(args))
+        branch_args.fix_term = fixed_terms
+        config = search_config_from_args(branch_args, period=args.period, branch=args.branch)
+        search = make_search(config)
+        result, table = search.run()
+        summary[str(result)] += 1
+        label = ", ".join(labels) if labels else "base"
+        print(f"== {label} ==")
+        print(f"result: {result}")
+        if config.show_constraint_counts:
+            print("constraint groups:")
+            for group, count in search.constraint_counts.most_common():
+                print(f"  {group}: {count}")
+        if table is not None:
+            found_sat = True
+            print_validation(table, args.witness)
+            return not args.continue_after_sat
+        if result == z3.unknown:
+            found_unknown = True
+            print(f"reason: {search.solver.reason_unknown()}")
+        return False
+
+    def recurse(index: int, fixed_terms: list[tuple[str, int]], labels: list[str]) -> bool:
+        if index == len(split_terms):
+            return run_leaf(fixed_terms, labels)
+        term = split_terms[index]
+        for value in range(args.order):
+            if recurse(index + 1, fixed_terms + [(term, value)], labels + [f"{term}={value}"]):
+                return True
+        return False
+
+    recurse(0, base_fixed_terms, [f"{term}={value}" for term, value in base_fixed_terms])
+    print("summary:")
+    for result, count in summary.items():
+        print(f"  {result}: {count}")
+    if found_sat:
+        return 1
+    if found_unknown:
+        return 2
+    return 0
 
 
 def calibrate_linear_command(args: argparse.Namespace) -> int:
@@ -735,6 +986,45 @@ def fixed_cell(value: str) -> tuple[int, int, int]:
     return row, col, cell_value
 
 
+def fixed_term(value: str) -> tuple[str, int]:
+    separator = ":" if ":" in value else "=" if "=" in value else None
+    if separator is None:
+        raise argparse.ArgumentTypeError("must have the form term:value or term=value")
+    term, raw_value = value.rsplit(separator, 1)
+    term = term.strip()
+    if not term:
+        raise argparse.ArgumentTypeError("term must not be empty")
+    try:
+        parsed_value = int(raw_value.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("term value must be an integer") from exc
+    if parsed_value < 0:
+        raise argparse.ArgumentTypeError("term value must be nonnegative")
+    return term, parsed_value
+
+
+def term_equality(value: str) -> tuple[str, str]:
+    if "!=" in value or "=" not in value:
+        raise argparse.ArgumentTypeError("must have the form left=right")
+    left, right = value.split("=", 1)
+    left = left.strip()
+    right = right.strip()
+    if not left or not right:
+        raise argparse.ArgumentTypeError("both sides of a term equality must be nonempty")
+    return left, right
+
+
+def term_inequality(value: str) -> tuple[str, str]:
+    if "!=" not in value:
+        raise argparse.ArgumentTypeError("must have the form left!=right")
+    left, right = value.split("!=", 1)
+    left = left.strip()
+    right = right.strip()
+    if not left or not right:
+        raise argparse.ArgumentTypeError("both sides of a term inequality must be nonempty")
+    return left, right
+
+
 def add_common_summary_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--witness", type=int, default=0, help="witness element for diagnostics")
 
@@ -753,6 +1043,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["any", "r=p", "external"],
         default="any",
         help="period-four gate branch to enforce",
+    )
+    search.add_argument(
+        "--period5-branch",
+        choices=["any", "internal", "external", "g=q", "g=a", "g=p"],
+        default="any",
+        help="period-five branch preset for g=q*x",
+    )
+    search.add_argument(
+        "--period5-s-branch",
+        choices=["any", "internal", "external", "s=a", "s=b", "s=p"],
+        default="any",
+        help="period-five g=p subbranch preset for s=p*x",
     )
     search.add_argument(
         "--period4-external-cycle",
@@ -775,6 +1077,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         type=fixed_cell,
         help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
+    )
+    search.add_argument(
+        "--fix-term",
+        action="append",
+        type=fixed_term,
+        help="add a term constraint such as q*x:5, a*q=7, or (q*x)*q:3; can be repeated",
+    )
+    search.add_argument(
+        "--eq-term",
+        action="append",
+        type=term_equality,
+        help="add a term equality such as (a*q)*a=(q*q)*q; can be repeated",
+    )
+    search.add_argument(
+        "--neq-term",
+        action="append",
+        type=term_inequality,
+        help="add a term inequality such as a*q!=q*q; can be repeated",
     )
     search.add_argument("--timeout-ms", type=int, default=30000, help="Z3 timeout in milliseconds; 0 means none")
     search.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
@@ -817,6 +1137,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional split for the period-four external L_x component",
     )
     sweep.add_argument(
+        "--period5-branch",
+        choices=["any", "internal", "external", "g=q", "g=a", "g=p"],
+        default="any",
+        help="period-five branch preset for g=q*x",
+    )
+    sweep.add_argument(
+        "--period5-s-branch",
+        choices=["any", "internal", "external", "s=a", "s=b", "s=p"],
+        default="any",
+        help="period-five g=p subbranch preset for s=p*x",
+    )
+    sweep.add_argument(
         "--period4-external-lx-cycle-size",
         type=positive_int,
         help="fix the exact size of the external L_x cycle containing t=q*a in the period-four external branch",
@@ -831,6 +1163,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         type=fixed_cell,
         help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
+    )
+    sweep.add_argument(
+        "--fix-term",
+        action="append",
+        type=fixed_term,
+        help="add a term constraint such as q*x:5, a*q=7, or (q*x)*q:3; can be repeated",
+    )
+    sweep.add_argument(
+        "--eq-term",
+        action="append",
+        type=term_equality,
+        help="add a term equality such as (a*q)*a=(q*q)*q; can be repeated",
+    )
+    sweep.add_argument(
+        "--neq-term",
+        action="append",
+        type=term_inequality,
+        help="add a term inequality such as a*q!=q*q; can be repeated",
     )
     sweep.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
     sweep.add_argument("--no-label-injective", action="store_true", help="do not add row-label injectivity constraints")
@@ -858,6 +1208,108 @@ def build_parser() -> argparse.ArgumentParser:
         help="per-check timeout for greedy core minimization; 0 means no separate limit",
     )
     sweep.set_defaults(func=sweep_command)
+
+    split = subparsers.add_parser("split", help="branch a search over all values of one or more terms")
+    split.add_argument("--backend", choices=["enum", "array"], default="enum", help="Z3 encoding backend")
+    split.add_argument("--order", type=positive_int, required=True, help="finite carrier size")
+    add_common_summary_args(split)
+    split.add_argument("--period", type=positive_int, help="fix the witness L_x orbit period")
+    split.add_argument(
+        "--branch",
+        choices=["any", "r=p", "external"],
+        default="any",
+        help="period-four gate branch to enforce",
+    )
+    split.add_argument(
+        "--period5-branch",
+        choices=["any", "internal", "external", "g=q", "g=a", "g=p"],
+        default="any",
+        help="period-five branch preset for g=q*x",
+    )
+    split.add_argument(
+        "--period5-s-branch",
+        choices=["any", "internal", "external", "s=a", "s=b", "s=p"],
+        default="any",
+        help="period-five g=p subbranch preset for s=p*x",
+    )
+    split.add_argument(
+        "--period4-external-cycle",
+        choices=["any", "two-cycle", "third"],
+        default="any",
+        help="split the period-four external L_x component by whether x*r=t=q*a",
+    )
+    split.add_argument(
+        "--period4-external-lx-cycle-size",
+        type=positive_int,
+        help="fix the exact size of the external L_x cycle containing t=q*a in the period-four external branch",
+    )
+    split.add_argument(
+        "--lx-complement-cycles",
+        type=positive_int_tuple,
+        help="fix the cycle sizes of L_x on labels outside the principal witness orbit, for example 3,2,1",
+    )
+    split.add_argument(
+        "--fix-cell",
+        action="append",
+        type=fixed_cell,
+        help="add a multiplication constraint row*col=value using row,col,value or row:col:value; can be repeated",
+    )
+    split.add_argument(
+        "--fix-term",
+        action="append",
+        type=fixed_term,
+        help="add a term constraint such as q*x:5, a*q=7, or (q*x)*q:3; can be repeated",
+    )
+    split.add_argument(
+        "--eq-term",
+        action="append",
+        type=term_equality,
+        help="add a term equality such as (a*q)*a=(q*q)*q; can be repeated",
+    )
+    split.add_argument(
+        "--neq-term",
+        action="append",
+        type=term_inequality,
+        help="add a term inequality such as a*q!=q*q; can be repeated",
+    )
+    split.add_argument(
+        "--split-term",
+        action="append",
+        required=True,
+        help="branch over all values of this term; can be repeated for nested splits",
+    )
+    split.add_argument(
+        "--continue-after-sat",
+        action="store_true",
+        help="continue checking sibling branches after a satisfying table is found",
+    )
+    split.add_argument("--timeout-ms", type=int, default=30000, help="Z3 timeout per leaf in milliseconds; 0 means none")
+    split.add_argument("--no-left-permutations", action="store_true", help="do not add left-row permutation constraints")
+    split.add_argument("--no-label-injective", action="store_true", help="do not add row-label injectivity constraints")
+    split.add_argument("--no-orbit-facts", action="store_true", help="do not add trusted orbit recurrence facts")
+    split.add_argument("--no-derived-identities", action="store_true", help="do not add transformed/key identity constraints")
+    split.add_argument("--no-bad-point-lemmas", action="store_true", help="do not add bad-witness consequences")
+    split.add_argument("--no-collision-splitter", action="store_true", help="do not add right-fiber splitter constraints")
+    split.add_argument(
+        "--no-symmetry-break-bad-orbit",
+        action="store_true",
+        help="do not relabel the first bad L_x orbit points to 0,1,2,3 when possible",
+    )
+    split.add_argument(
+        "--no-symmetry-break-period4-external",
+        action="store_true",
+        help="do not relabel period-four external branch points r=q*x and q*a",
+    )
+    split.add_argument("--show-constraint-counts", action="store_true", help="print added constraint groups")
+    split.add_argument("--track-groups", action="store_true", help="use group assumptions and print an UNSAT core")
+    split.add_argument("--minimize-core", action="store_true", help="greedily minimize the group UNSAT core")
+    split.add_argument(
+        "--core-check-timeout-ms",
+        type=int,
+        default=5000,
+        help="per-check timeout for greedy core minimization; 0 means no separate limit",
+    )
+    split.set_defaults(func=split_command)
 
     calibrate = subparsers.add_parser("calibrate-linear", help="verify a linear model table")
     calibrate.add_argument("--prime", type=positive_int, default=5, help="field size, expected prime")

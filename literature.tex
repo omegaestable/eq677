@@ -714,6 +714,260 @@ It also says that \(y\op r=z\op r\) would force \(y=z\), so
 \(a\op b=\sigma(a)(b)\) gives the displayed formulas.
 \end{proof}
 
+\section{Stress-tested candidate structures}
+
+A candidate structure in this section is only a partial local diagram around a bad point
+\(x\).  It is not asserted to extend to a finite magma unless explicitly stated.  The
+word ``survives'' means that the currently proved tests below do not yet eliminate the
+diagram, and the displayed equations are the obligations that remain.
+
+\begin{proposition}[Universal stress tests]\label{prop:universal-stress-tests}
+Assume \(\EqAt{\E{255}}{x}\) fails.  Then every candidate around \(x\) must pass the
+following tests.
+\begin{enumerate}
+\item \(R_x\) is not surjective and not injective.  In particular, no finite
+right-cancellative, quasigroup, or loop candidate can be bad at \(x\).
+\item No commutative finite candidate can be bad at \(x\).
+\item The \(L_x\)-period of \(x\) is \(d\ge4\).  In particular, \(x\op x\neq x\), and
+the periods \(d=2\) and \(d=3\) are unavailable.
+\item For every orbit edge,
+\[
+d_k=c_k\op x\notin\{x,c_{k-1}\}.
+\]
+\item Every first repetition in the right tail \(\rho_{n+1}=\rho_n\op x\) produces a
+splitter rectangle: if \(y\op x=z\op x=e\) with \(y\neq z\), then
+\[
+(y\op e)\op y=(z\op e)\op z=e\backslash x,
+\qquad
+y\op e\neq z\op e.
+\]
+\item Every proposed short return must pass the division return trap of
+Lemma~\ref{lem:division-trap}: if \(u=y\op z\), \(v=u\op y\), and \(z\op v=u\), then
+\(z=y\op u\).
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\cert{} At a bad point, Proposition~\ref{prop:unique-witness} gives no solution to
+\(u\op x=x\), so \(x\notin\operatorname{im}R_x\).  Since the magma is finite, an
+injective \(R_x\) would be surjective.  This proves the first item.  If the operation is
+commutative, then \(R_x=L_x\), but \(L_x\) is bijective by
+Proposition~\ref{prop:left-division}; this proves the second item.  The period statement
+is Corollary~\ref{cor:small-periods}.  The orbit-edge exclusion is
+Lemma~\ref{lem:bad-orbit-exclusions}.  The splitter rectangle is
+Lemma~\ref{lem:right-tail}, or Proposition~\ref{prop:rectangles} for any chosen
+collision fiber.  The last item is Lemma~\ref{lem:division-trap}.
+\end{proof}
+
+\begin{proposition}[Period-five internal-tail stress tests]\label{prop:p5-internal-tests}
+Assume \(d=5\) and \(\EqAt{\E{255}}{x}\) fails.  Write
+\[
+a=c_1,\qquad b=c_2,\qquad q=c_3,\qquad p=c_4,
+\]
+and put
+\[
+e=b\op x,
+\qquad g=q\op x,
+\qquad s=p\op x.
+\]
+Then
+\[
+e\notin\{x,a\},\qquad g\notin\{x,b\},\qquad s\notin\{x,q\},
+\]
+and
+\[
+b\op g=a,
+\qquad q\op s=b,
+\qquad p\op a=q. \tag{P5.0}
+\]
+If the right tail stays in the principal orbit through \(g\), then the only possibilities
+are \(g\in\{a,q,p\}\), and they have the following stress data.
+\begin{enumerate}
+\item If \(g=q\), then
+\[
+b\op q=a,
+\qquad
+(a\op q)\op a=(q\op q)\op q=q\backslash x,
+\qquad
+a\op q\neq q\op q.
+\]
+\item If \(g=a\), then
+\[
+b\op a=a,
+\qquad
+(q\op a)\op q=b\op x=a\backslash x,
+\qquad
+q\op a\neq b.
+\]
+\item If \(g=p\), then
+\[
+b\op p=a,
+\qquad
+q\op s=b,
+\qquad
+s\in M\setminus\{x,q\}.
+\]
+In the internal subcases for \(s\), the following extra tests apply:
+\[
+\begin{array}{ccl}
+s=a&\Longrightarrow&q\op a=b,\\[-1mm]
+&&q\op p=b\op x=a\backslash x,\\[1mm]
+s=p&\Longrightarrow&q\op p=b,\\[-1mm]
+&&b\op q=(p\op p)\op p=p\backslash x,
+\quad q\op p\neq p\op p,\\[1mm]
+s=b&\Longrightarrow&q\op b=b.
+\end{array}
+\]
+If moreover \(s=b\) and the next value \(e=b\op x\) is still principal-orbit-internal,
+then \(e\in\{b,q,p\}\), giving respectively the collision fibers
+\[
+\{p,b\}\to b,
+\qquad
+\{a,b\}\to q,
+\qquad
+\{q,b\}\to p.
+\]
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\cert{} The exclusions are Proposition~\ref{prop:p5p6}.  The recurrence
+\(c_{k-1}=c_k\op d_{k+1}\), with \(d_3=g\) and \(d_4=s\), gives
+\[
+b\op g=a,
+\qquad q\op s=b,
+\]
+and the recurrence at \(k=4\) gives \(p\op a=q\).
+
+If \(g=q\), then \(b\op q=a\) follows from \(b\op g=a\).  Also
+\(a\op x=q=q\op x\), so Proposition~\ref{prop:rectangles}, applied to the fiber
+\(\{a,q\}\to q\), gives the displayed splitter rectangle.
+
+If \(g=a\), then \(b\op a=a\).  Since \(x\op x=a=q\op x\),
+Proposition~\ref{prop:rectangles} gives
+\[
+(x\op a)\op x=(q\op a)\op q=a\backslash x,
+\qquad x\op a\neq q\op a.
+\]
+Because \(x\op a=b\), this is the displayed statement.
+
+If \(g=p\), then \(b\op p=a\), and the relation \(q\op s=b\) is already in (P5.0).
+The exclusion \(s\notin\{x,q\}\) is the bad orbit-edge exclusion at \(k=4\).  If
+\(s=a\), then \(q\op a=b\), and the fiber \(\{x,p\}\to a\) gives
+\[
+(x\op a)\op x=(p\op a)\op p=a\backslash x.
+\]
+Using \(x\op a=b\) and \(p\op a=q\), this becomes \(q\op p=b\op x=a\backslash x\).
+If \(s=p\), then \(q\op p=b\), and the fiber \(\{q,p\}\to p\) gives
+\[
+(q\op p)\op q=(p\op p)\op p=p\backslash x,
+\qquad q\op p\neq p\op p,
+\]
+which is the displayed statement.  If \(s=b\), then \(q\op b=b\).  Finally, when
+\(s=b\), the next right-tail value is \(e=b\op x\).  If it is principal-orbit-internal,
+then \(e\notin\{x,a\}\), so \(e\in\{b,q,p\}\); comparing with the earlier right-tail
+values \(a\op x=q\), \(q\op x=p\), and \(p\op x=b\) gives the three listed fibers.
+\end{proof}
+
+\begin{remark}[Candidate pruning ledger]\label{rem:candidate-ledger}
+The current hand-pruned candidate zoo is as follows.  A ruled-out line is eliminated by
+the cited stress tests; a surviving line is only a local blueprint for the next pruning
+pass.
+\begin{enumerate}[label=\textup{C\arabic*.},leftmargin=2.7em]
+\item \emph{Finite right-cancellative, quasigroup, or loop candidate: ruled out.}
+At a bad point, \(R_x\) misses \(x\), hence cannot be injective in a finite magma.
+
+\item \emph{Commutative finite candidate: ruled out.}
+Commutativity gives \(R_x=L_x\), contradicting the missing value \(x\notin
+\operatorname{im}R_x\).
+
+\item \emph{Idempotent bad point: ruled out.}
+If \(x\op x=x\), then \(d=1\), so \(q=x\) and \(q\op x=x\).
+
+\item \emph{Small-period candidate \(d=2\) or \(d=3\): ruled out.}
+These are exactly the impossible cases in Corollary~\ref{cor:small-periods}.
+
+\item \emph{Period-four candidate on \(O_4=\{x,a,q,p\}\) only: ruled out.}
+Proposition~\ref{prop:period-four} forces \(q\op x\) or \(p\op x\) outside \(O_4\).
+
+\item \emph{Period-four delayed loop \(q\op x=p\), \(p\op x=p\): ruled out.}
+This is the short-return branch killed by Lemma~\ref{lem:division-trap} inside the
+proof of Proposition~\ref{prop:period-four}.
+
+\item \emph{Period-four early external exit: survives.}
+Here
+\[
+q\op x=r\notin O_4,
+\qquad a\op r=x,
+\]
+with \(x\op q=p\), \(x\op p=x\), and \(p\op a=q\).  The next tests are the splitter
+rectangle at the first repetition of the right tail and the fixed-point gate for the
+external element \(r\).
+
+\item \emph{Period-four delayed external exit: survives.}
+Here
+\[
+q\op x=p,
+\qquad p\op x=s\notin O_4,
+\]
+and Proposition~\ref{prop:period-four} gives
+\[
+q\op a=q,
+\qquad q\op s=a,
+\qquad p\op a=q,
+\qquad s=(q\op q)\op q=a\op(q\op q).
+\]
+
+\item \emph{Period-five internal branch \(q\op x=q\): survives but constrained.}
+The right-tail fiber \(\{a,q\}\to q\) must satisfy
+\[
+(a\op q)\op a=(q\op q)\op q=q\backslash x,
+\qquad a\op q\neq q\op q,
+\]
+and the orbit recurrence also gives \(b\op q=a\).
+
+\item \emph{Period-five internal branch \(q\op x=a\): survives but constrained.}
+The fiber \(\{x,q\}\to a\) forces
+\[
+(q\op a)\op q=b\op x=a\backslash x,
+\qquad q\op a\neq b,
+\]
+and the orbit recurrence gives \(b\op a=a\).
+
+\item \emph{Period-five branch \(q\op x=p\): survives only as a split family.}
+It must satisfy
+\[
+b\op p=a,
+\qquad q\op(p\op x)=b,
+\qquad p\op x\notin\{x,q\}.
+\]
+If no external value appears at \(p\op x\), then
+\[
+p\op x\in\{a,b,p\},
+\]
+with the corresponding extra tests listed in Proposition~\ref{prop:p5-internal-tests}.
+
+\item \emph{Period-six orbit-only branch: survives with collision.}
+For \(O_6=\{x,a,b,c,q,p\}\), a principal-orbit-only right tail maps the six elements
+of \(O_6\) into \(O_6\setminus\{x\}\).  Hence \(R_x|_{O_6}\) has a collision, and every
+such collision must satisfy Proposition~\ref{prop:rectangles}.  The bad-edge exclusions
+from Proposition~\ref{prop:p5p6} require
+\[
+b\op x\notin\{x,a\},
+\qquad c\op x\notin\{x,b\},
+\qquad q\op x\notin\{x,c\},
+\qquad p\op x\notin\{x,q\}.
+\]
+\end{enumerate}
+\end{remark}
+
+\begin{remark}[Stress-test ledger]
+The most compact surviving internal targets are the period-five branches
+\(q\op x=q\) and \(q\op x=a\).  Both create a collision fiber inside the principal
+orbit and therefore expose explicit splitter equations.  The period-four survivors are
+less compact because they force an external element, so the next hand-pruning pass should
+first apply Lemma~\ref{lem:division-trap} to the two period-five splitter rectangles, then
+return to the period-four external elements \(r\) and \(s\).
+\end{remark}
+
 \section{Bad-point checklist and open gates}
 
 \begin{proposition}[Bad-point package]\label{prop:bad-point}
@@ -811,6 +1065,12 @@ At a bad period-four point, feed the forced external element among
 q\op x,\qquad p\op x
 \]
 back into the fixed-point gate or the splitter gate.
+\end{target}
+
+\begin{target}[Period-five pruning gate]
+Use the explicit internal splitter rectangles in Proposition~\ref{prop:p5-internal-tests},
+especially the branches \(q\op x=q\) and \(q\op x=a\), to force either \(q\op x=x\), an
+external product, or a finite counting contradiction.
 \end{target}
 
 \begin{thebibliography}{9}
