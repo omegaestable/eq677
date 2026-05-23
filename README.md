@@ -50,6 +50,7 @@ Use the repository virtualenv:
 & .\.venv\Scripts\python.exe scripts\e677_db_analyze.py analyze-file path\to\table.txt
 & .\.venv\Scripts\python.exe scripts\e677_db_analyze.py manifest
 & .\.venv\Scripts\python.exe scripts\e677_z3_search.py db-frontier --max-size 40
+& .\.venv\Scripts\python.exe scripts\e677_z3_search.py piecewise-prime --prime 127 --qr-slope 58 --nqr-slope 29
 ```
 
 Authenticated API writes are explicit opt-in subcommands on

@@ -33,6 +33,10 @@ def e255_at(table: Table, x: int) -> bool:
     return table[table[table[x][x]][x]][x] == x
 
 
+def e255_failures(table: Table) -> list[int]:
+    return [x for x in range(len(table)) if not e255_at(table, x)]
+
+
 def left_rows_are_permutations(table: Table) -> bool:
     order = len(table)
     expected = set(range(order))
@@ -134,6 +138,92 @@ def linear_table(prime: int, alpha: int, beta: int, const: int) -> Table:
         [((alpha * x) + (beta * y) + const) % prime for y in range(prime)]
         for x in range(prime)
     ]
+
+
+def phi10_mod(value: int, modulus: int) -> int:
+    reduced = value % modulus
+    return (pow(reduced, 4, modulus) - pow(reduced, 3, modulus) + pow(reduced, 2, modulus) - reduced + 1) % modulus
+
+
+def phi10_roots_mod_prime(prime: int) -> list[int]:
+    return [value for value in range(prime) if phi10_mod(value, prime) == 0]
+
+
+def is_prime(value: int) -> bool:
+    if value < 2:
+        return False
+    if value == 2:
+        return True
+    if value % 2 == 0:
+        return False
+    divisor = 3
+    while divisor * divisor <= value:
+        if value % divisor == 0:
+            return False
+        divisor += 2
+    return True
+
+
+def quadratic_residues_mod_prime(prime: int) -> set[int]:
+    return {pow(value, 2, prime) for value in range(1, prime)}
+
+
+def qr_piecewise_values(
+    prime: int,
+    qr_slope: int,
+    nqr_slope: int,
+    residues: set[int] | None = None,
+) -> list[int]:
+    residues = residues if residues is not None else quadratic_residues_mod_prime(prime)
+    values = [0] * prime
+    for difference in range(1, prime):
+        slope = qr_slope if difference in residues else nqr_slope
+        values[difference] = (slope * difference) % prime
+    return values
+
+
+def translation_table_from_values(values: Sequence[int]) -> Table:
+    order = len(values)
+    return [
+        [(left + values[(right - left) % order]) % order for right in range(order)]
+        for left in range(order)
+    ]
+
+
+def translation_e677_difference_failures(values: Sequence[int]) -> list[int]:
+    order = len(values)
+    failures: list[int] = []
+    for difference in range(order):
+        y_times_x = (difference + values[-difference % order]) % order
+        yx_times_y = (y_times_x + values[(difference - y_times_x) % order]) % order
+        inner = values[yx_times_y]
+        result = (difference + values[(inner - difference) % order]) % order
+        if result != 0:
+            failures.append(difference)
+    return failures
+
+
+def frontier_hints(size: int) -> tuple[int, list[str]]:
+    score = 0
+    hints: list[str] = []
+    if is_prime(size):
+        score += 2
+        roots = phi10_roots_mod_prime(size)
+        if roots:
+            hints.append(f"prime field linear Phi_10 roots {format_int_list(roots, 12)}")
+        else:
+            score += 1
+            hints.append("prime field has no Phi_10 root; try QR/coset piecewise-linear search")
+    if size % 20 in (1, 5):
+        score += 3
+        hints.append("Steiner S(2,5,n) congruence is admissible")
+    if size > 5 and size % 5 == 0:
+        score += 1
+        hints.append("F_5-based bundle, pencil, or CRT-Steiner probe")
+    if not is_prime(size) and size > 1:
+        score += 1
+        hints.append("composite size: product/fiber-bundle probe")
+    return score, hints or ["generic bad-witness row-Latin search"]
 
 
 def witness_summary(table: Table, x: int, max_fibers: int = 4) -> str:
@@ -332,6 +422,14 @@ class E677Search:
             current = witness_expr
             for _ in range(index):
                 current = self.mul(witness_expr, current)
+            return current
+
+        right_tail_match = re.fullmatch(r"rho(\d+)", name)
+        if right_tail_match:
+            index = int(right_tail_match.group(1))
+            current = witness_expr
+            for _ in range(index):
+                current = self.mul(current, witness_expr)
             return current
 
         a_expr = self.mul(witness_expr, witness_expr)
@@ -839,10 +937,17 @@ class E677EnumSearch(E677Search):
         return table
 
 
-def print_validation(table: Table, witness: int) -> None:
+def print_validation(
+    table: Table,
+    witness: int,
+    *,
+    show_table: bool = True,
+    show_witness_summary: bool = True,
+) -> None:
     ok, errors = check_table(table)
-    print(format_table(table))
-    print()
+    if show_table:
+        print(format_table(table))
+        print()
     print(f"verified E677 and left permutations: {ok}")
     if errors:
         for error in errors:
@@ -851,7 +956,8 @@ def print_validation(table: Table, witness: int) -> None:
     print(f"E255 failing witnesses: {failing}")
     print(f"right cancellative: {right_cancellative(table)}")
     print(f"idempotent: {idempotent(table)}")
-    print(witness_summary(table, witness))
+    if show_witness_summary:
+        print(witness_summary(table, witness))
 
 
 def search_command(args: argparse.Namespace) -> int:
@@ -970,6 +1076,8 @@ def sweep_command(args: argparse.Namespace) -> int:
 
 def split_command(args: argparse.Namespace) -> int:
     split_terms: list[str] = args.split_term or []
+    if not split_terms:
+        raise ValueError("split requires --split-term")
     base_fixed_terms = list(args.fix_term or [])
     summary: Counter[str] = Counter()
     found_sat = False
@@ -1025,6 +1133,81 @@ def calibrate_linear_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def print_piecewise_pair(
+    prime: int,
+    qr_slope: int,
+    nqr_slope: int,
+    *,
+    residues: set[int],
+    validate_table: bool,
+) -> bool:
+    values = qr_piecewise_values(prime, qr_slope, nqr_slope, residues)
+    failures = translation_e677_difference_failures(values)
+    is_permutation = len(set(values)) == prime
+    ok = is_permutation and not failures
+    print(
+        f"qr={qr_slope % prime} nqr={nqr_slope % prime} "
+        f"perm={is_permutation} diff_e677_failures={len(failures)} "
+        f"Phi_10=({phi10_mod(qr_slope, prime)}, {phi10_mod(nqr_slope, prime)})"
+    )
+    if failures:
+        print(f"  first failing differences: {format_int_list(failures[:12], 12)}")
+    if validate_table and ok:
+        table = translation_table_from_values(values)
+        table_ok, errors = check_table(table)
+        print(f"  table_check={table_ok} e255_failures={e255_failures(table)} right_cancel={right_cancellative(table)}")
+        if errors:
+            for error in errors[:3]:
+                print(f"    {error}")
+        ok = table_ok
+    return ok
+
+
+def piecewise_prime_command(args: argparse.Namespace) -> int:
+    prime = args.prime
+    if not is_prime(prime):
+        raise ValueError("--prime must be prime for QR/NQR piecewise search")
+    explicit_pair = args.qr_slope is not None or args.nqr_slope is not None
+    if explicit_pair and (args.qr_slope is None or args.nqr_slope is None):
+        raise ValueError("provide both --qr-slope and --nqr-slope, or use --all-pairs")
+    roots = phi10_roots_mod_prime(prime)
+    residues = quadratic_residues_mod_prime(prime)
+    print(f"prime: {prime}")
+    print(f"Phi_10 roots: {format_int_list(roots, 20)}")
+
+    if explicit_pair:
+        table = translation_table_from_values(qr_piecewise_values(prime, args.qr_slope, args.nqr_slope, residues))
+        print_piecewise_pair(prime, args.qr_slope, args.nqr_slope, residues=residues, validate_table=False)
+        print_validation(
+            table,
+            args.witness,
+            show_table=args.print_table,
+            show_witness_summary=args.witness_summary,
+        )
+        ok, _errors = check_table(table)
+        return 0 if ok and not e255_failures(table) else 1
+
+    if not args.all_pairs:
+        raise ValueError("provide slopes with --qr-slope/--nqr-slope or request enumeration with --all-pairs")
+
+    matches: list[tuple[int, int]] = []
+    for qr_slope in range(prime):
+        for nqr_slope in range(prime):
+            values = qr_piecewise_values(prime, qr_slope, nqr_slope, residues)
+            if len(set(values)) != prime:
+                continue
+            if translation_e677_difference_failures(values):
+                continue
+            matches.append((qr_slope, nqr_slope))
+
+    print(f"QR/NQR candidate pairs: {len(matches)}")
+    for qr_slope, nqr_slope in matches[: args.limit]:
+        print_piecewise_pair(prime, qr_slope, nqr_slope, residues=residues, validate_table=args.validate_found)
+    if len(matches) > args.limit:
+        print(f"... {len(matches) - args.limit} more pair(s) not printed")
+    return 0 if matches else 1
+
+
 def db_frontier_command(args: argparse.Namespace) -> int:
     manifest = load_db_manifest(args.manifest)
     magmas = manifest["magmas"]
@@ -1061,6 +1244,8 @@ def db_frontier_command(args: argparse.Namespace) -> int:
         if size in open_commentary_sizes and size not in present_sizes
     ]
     check_sizes = sorted(set(interval_open_no_record + interval_open_commentary))
+    frontier_hint_cache = {size: frontier_hints(size) for size in check_sizes}
+    ranked_check_sizes = sorted(check_sizes, key=lambda size: (-frontier_hint_cache[size][0], size))
 
     e255_failures = [record for record in magmas if record.get("satisfies_255") is False]
     non_right_cancellative = [record for record in magmas if record.get("right_cancellative") is False]
@@ -1078,6 +1263,10 @@ def db_frontier_command(args: argparse.Namespace) -> int:
     print()
     print(f"proved-empty sizes in {args.min_size}..{args.max_size}: {format_int_list(interval_empty, args.list_limit)}")
     print(f"open/no-record sizes in {args.min_size}..{args.max_size}: {format_int_list(check_sizes, args.list_limit)}")
+    if ranked_check_sizes:
+        print("pattern-ranked open/no-record sizes:")
+        for size in ranked_check_sizes[: args.recommend]:
+            print(f"  size {size}: {'; '.join(frontier_hint_cache[size][1])}")
     print(
         f"known non-right-cancellative sizes in {args.min_size}..{args.max_size}: "
         f"{format_int_list(interval_non_rc_sizes, args.list_limit)}"
@@ -1113,12 +1302,18 @@ def db_frontier_command(args: argparse.Namespace) -> int:
             f"& .\\.venv\\Scripts\\python.exe scripts\\e677_db_analyze.py analyze --hash-prefix {str(record['canonical_hash'])[:12]}"
         )
     if check_sizes:
-        for size in check_sizes[: args.recommend]:
+        for size in ranked_check_sizes[: args.recommend]:
             print(
                 f"  size {size} existence: "
                 f"& .\\.venv\\Scripts\\python.exe scripts\\e677_z3_search.py existence --order {size} "
                 f"--timeout-ms {args.timeout_ms} --track-groups"
             )
+            if is_prime(size):
+                print(
+                    f"  size {size} QR/NQR piecewise probe: "
+                    f"& .\\.venv\\Scripts\\python.exe scripts\\e677_z3_search.py piecewise-prime --prime {size} "
+                    "--all-pairs --validate-found"
+                )
             print(
                 f"  size {size} bad-witness sweep if existence is sat/unknown: "
                 f"& .\\.venv\\Scripts\\python.exe scripts\\e677_z3_search.py sweep --order {size} "
@@ -1134,6 +1329,55 @@ def db_frontier_command(args: argparse.Namespace) -> int:
             "--limit 5 --cache-dir run_logs\\database_cache"
         )
     return 2 if e255_failures else 0
+
+
+def selftest_command(_args: argparse.Namespace) -> int:
+    args = argparse.Namespace(
+        backend="enum",
+        order=10,
+        witness=0,
+        period=None,
+        branch="any",
+        period4_external_cycle="any",
+        period4_external_lx_cycle_size=None,
+        period5_branch="any",
+        period5_s_branch="any",
+        lx_complement_cycles=None,
+        fix_cell=None,
+        fix_term=None,
+        eq_term=[("rho3", "rho5")],
+        neq_term=None,
+        timeout_ms=0,
+        no_left_permutations=False,
+        no_label_injective=False,
+        no_orbit_facts=False,
+        no_derived_identities=False,
+        no_bad_point_lemmas=False,
+        no_collision_splitter=False,
+        no_symmetry_break_bad_orbit=False,
+        no_symmetry_break_period4_external=False,
+        show_constraint_counts=False,
+        track_groups=False,
+        minimize_core=False,
+        core_check_timeout_ms=0,
+    )
+    config = search_config_from_args(args, period=args.period, branch=args.branch)
+    search = make_search(config)
+    search.term_expr("rho5")
+    assert ("rho3", "rho5") in config.term_equalities
+
+    tail_search = make_search(config)
+    tail_search.term_expr("rho5")
+
+    assert is_prime(127)
+    assert phi10_mod(4, 5) == 0
+    assert frontier_hints(41)[0] > 0
+    values = qr_piecewise_values(127, 58, 29)
+    assert len(set(values)) == 127
+    assert translation_e677_difference_failures(values) == []
+
+    print("selftest ok")
+    return 0
 
 
 def positive_int(value: str) -> int:
@@ -1513,7 +1757,6 @@ def build_parser() -> argparse.ArgumentParser:
     split.add_argument(
         "--split-term",
         action="append",
-        required=True,
         help="branch over all values of this term; can be repeated for nested splits",
     )
     split.add_argument(
@@ -1557,6 +1800,18 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_summary_args(calibrate)
     calibrate.set_defaults(func=calibrate_linear_command)
 
+    piecewise = subparsers.add_parser("piecewise-prime", help="test QR/NQR translation-invariant prime templates")
+    piecewise.add_argument("--prime", type=positive_int, required=True, help="prime carrier size")
+    piecewise.add_argument("--qr-slope", type=int, help="multiplier used on nonzero quadratic residues")
+    piecewise.add_argument("--nqr-slope", type=int, help="multiplier used on quadratic nonresidues")
+    piecewise.add_argument("--all-pairs", action="store_true", help="enumerate all QR/NQR slope pairs")
+    piecewise.add_argument("--limit", type=nonnegative_int, default=20, help="maximum candidate pairs to print")
+    piecewise.add_argument("--validate-found", action="store_true", help="run full table checks on printed enumeration hits")
+    piecewise.add_argument("--print-table", action="store_true", help="print the full table for an explicit slope pair")
+    piecewise.add_argument("--witness-summary", action="store_true", help="print detailed witness diagnostics for an explicit slope pair")
+    add_common_summary_args(piecewise)
+    piecewise.set_defaults(func=piecewise_prime_command)
+
     frontier = subparsers.add_parser("db-frontier", help="use the public database manifest to choose next checks")
     frontier.add_argument("--manifest", default=MANIFEST_URL, help="manifest URL or local JSON path")
     frontier.add_argument("--min-size", type=positive_int, default=1, help="first size to report")
@@ -1566,6 +1821,9 @@ def build_parser() -> argparse.ArgumentParser:
     frontier.add_argument("--list-limit", type=positive_int, default=40, help="maximum length of printed size lists")
     frontier.add_argument("--timeout-ms", type=int, default=120000, help="timeout to use in recommended sweep commands")
     frontier.set_defaults(func=db_frontier_command)
+
+    selftest = subparsers.add_parser("selftest", help="run offline parser/config checks")
+    selftest.set_defaults(func=selftest_command)
     return parser
 
 

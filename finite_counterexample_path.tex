@@ -1,0 +1,475 @@
+\documentclass[12pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm,enumitem}
+\usepackage[margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\abovedisplayskip}{7pt}
+\setlength{\belowdisplayskip}{7pt}
+\setlist{leftmargin=1.5em,itemsep=4pt,topsep=4pt}
+
+\newcommand{\op}{\diamond}
+\newcommand{\E}[1]{\mathrm{E#1}}
+\newcommand{\fin}{\mathrm{fin}}
+\newcommand{\im}{\operatorname{im}}
+\newcommand{\Fix}{\operatorname{Fix}}
+
+\theoremstyle{definition}
+\newtheorem{problem}{Problem}
+\newtheorem*{warning}{Warning}
+\newtheorem*{goal}{Final goal}
+
+\title{A Finite Counterexample Challenge for Equation 677}
+\author{}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\begin{problem}[Counterexample question]
+Assume that the finite implication
+\[
+\E{677}\models_{\fin}\E{255}
+\]
+is false.  Find a finite nonempty magma $(M,\op)$ satisfying
+\[
+\E{677}:\qquad
+x=y\op\bigl(x\op((y\op x)\op y)\bigr)
+\]
+for all $x,y\in M$, together with a point $x\in M$ for which
+\[
+\E{255}:\qquad
+x=((x\op x)\op x)\op x
+\]
+fails.  Prefer a smallest example, or a branch analysis that narrows what the smallest
+example must look like.
+\end{problem}
+
+This is the companion problem to the proof challenge.  Here the working attitude is the
+opposite: suppose a bad finite point exists, then force its local diagram until either a
+complete Cayley table appears or the branch collapses.
+
+\begin{warning}
+The identities below are necessary conditions for a counterexample, not a substitute for
+checking the full law $\E{677}$.  Do not assume associativity, commutativity, an identity
+element, inverses, right cancellation, or quasigroup structure.  Every cancellation below
+is left cancellation, justified by finite left division.
+\end{warning}
+
+\section*{Hints}
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+\item \textbf{Start with the universal tools.}
+In any finite $\E{677}$-magma, every left translation $L_a(t)=a\op t$ is bijective, and
+\[
+a\backslash b=b\op((a\op b)\op a). \tag{L}
+\]
+Thus left cancellation is available.  Also keep the two global identities
+\[
+z=(y\op z)\op\bigl((y\op(y\op z))\op y\bigr), \tag{T}
+\]
+\[
+(y\op(y\op z))\op y
+=z\op\bigl(((y\op z)\op z)\op(y\op z)\bigr). \tag{K}
+\]
+These are the main algebraic engines for filling a partial table.
+
+\item \textbf{Normalize the bad point.}
+Fix a point $x$ at which $\E{255}$ fails, and put
+\[
+a=x\op x,
+\qquad
+q=a\op x=((x\op x)\op x),
+\qquad
+p=x\backslash x.
+\]
+Then the badness condition is
+\[
+q\op x\ne x. \tag{B0}
+\]
+Moreover, if $u\op x=x$, then $u=q$.  Hence, under (B0), there is no solution to
+$u\op x=x$ at all.  Equivalent bad conditions are
+\[
+q\backslash x\ne x,
+\qquad
+((x\op x)\op q)\op(x\op x)\ne x,
+\qquad
+(q\op x)\op q\ne p. \tag{B1}
+\]
+These give three quick tests for any proposed table.
+
+\item \textbf{Build the principal left orbit.}
+Define
+\[
+c_0=x,
+\qquad
+c_{k+1}=x\op c_k,
+\qquad
+d_k=c_k\op x.
+\]
+Let $d$ be the period of the $L_x$-orbit of $x$.  The recurrence
+\[
+c_{k-1}=c_k\op d_{k+1} \tag{O}
+\]
+holds for all $k$ modulo $d$, and
+\[
+p=c_{d-1},
+\qquad
+q=d_1=c_{d-2},
+\qquad
+p\op c_1=q. \tag{O1}
+\]
+In a bad point, $d\ge4$.  Also every orbit edge must avoid the two forbidden values
+\[
+d_k=c_k\op x\notin\{x,c_{k-1}\}. \tag{O2}
+\]
+
+For a labelled search, the first symmetry break is usually
+\[
+x=0,
+\qquad
+0\op0=1,
+\qquad
+0\op1=2,
+\qquad
+0\op2=3,
+\]
+with the rest of the $L_x$-cycle chosen according to the period $d$.
+
+\item \textbf{Exploit the defective right column.}
+Since no element maps to $x$ under $R_x(t)=t\op x$, the value $x$ is missing from
+\[
+\im R_x.
+\]
+Finiteness therefore forces a nontrivial right collision.  Choose either any collision
+or the first repetition in the right tail
+\[
+\rho_0=x,
+\qquad
+\rho_{n+1}=\rho_n\op x.
+\]
+Thus there are $y\ne z$ and $e$ with
+\[
+y\op x=z\op x=e. \tag{C0}
+\]
+Then (T) gives the rectangle
+\[
+(y\op e)\op y=(z\op e)\op z=e\backslash x, \tag{C1}
+\]
+and the splitter condition
+\[
+y\op e\ne z\op e. \tag{C2}
+\]
+This is not a contradiction.  It is the shape a genuine counterexample must repeatedly
+thread.
+
+\item \textbf{Keep the fixed maps fixed-point-free.}
+Define
+\[
+H(t)=(x\op t)\op x,
+\qquad
+F(t)=x\op(t\op x).
+\]
+They satisfy
+\[
+x\backslash t=t\op H(t),
+\qquad
+F(L_x(t))=L_x(H(t)). \tag{F}
+\]
+Thus $F$ and $H$ are conjugate finite self-maps.  At a bad point neither has a fixed
+point.  Equivalently, a counterexample must avoid
+\[
+H(t)=t
+\qquad\text{and}\qquad
+F(t)=t
+\]
+for every $t\in M$.
+
+\item \textbf{Use the permutation-label viewpoint.}
+Because every left translation is bijective, write
+\[
+y\op t=\sigma(y)(t),
+\qquad
+\sigma(y)\in\operatorname{Sym}(M).
+\]
+The label map $y\mapsto\sigma(y)$ is injective.  A right collision (C0) becomes
+\[
+\sigma(y)(x)=\sigma(z)(x)=e,
+\qquad
+\sigma(y)(e)\ne\sigma(z)(e),
+\]
+and the rectangle becomes
+\[
+\sigma(\sigma(y)(e))(y)=e\backslash x
+=\sigma(\sigma(z)(e))(z). \tag{P}
+\]
+This is often the cleanest way to search: construct an injective family of permutations
+whose pointwise multiplication table satisfies $\E{677}$.
+
+\item \textbf{Period four is the first test arena.}
+If $d=4$, write
+\[
+c_0=x,
+\qquad
+c_1=a,
+\qquad
+c_2=q,
+\qquad
+c_3=p,
+\qquad
+r=q\op x,
+\qquad
+s=p\op x.
+\]
+Every bad period-four candidate must satisfy
+\[
+x\op a=q,
+\quad
+a\op x=q,
+\quad
+a\op r=x,
+\quad
+x\op q=p,
+\quad
+x\op p=x,
+\quad
+p\op a=q, \tag{P4}
+\]
+and
+\[
+r\notin\{x,a,q\}. \tag{P4a}
+\]
+Thus either $r=p$ or $r$ leaves the principal orbit $\{x,a,q,p\}$.
+
+In the delayed branch $r=p$, one also has
+\[
+q\op a=q,
+\qquad
+s=(q\op q)\op q=a\op(q\op q),
+\qquad
+s\notin\{x,a,q,p\}. \tag{P4b}
+\]
+In the external branch $r\notin\{x,a,q,p\}$, set
+\[
+h=r\op q,
+\qquad
+t=q\op a,
+\qquad
+u=x\op r.
+\]
+Useful forced cells are
+\[
+q\op s=a,
+\qquad
+(p\op q)\op p=s,
+\qquad
+a\op h=r. \tag{P4c}
+\]
+In particular, a four-element orbit-only table cannot be bad; the right tail must create
+external structure.
+
+\item \textbf{Period five gives compact internal collisions.}
+If $d=5$, write
+\[
+c_0=x,
+\qquad
+c_1=a,
+\qquad
+c_2=b,
+\qquad
+c_3=q,
+\qquad
+c_4=p,
+\]
+and put
+\[
+e=b\op x,
+\qquad
+g=q\op x,
+\qquad
+s=p\op x.
+\]
+Then a bad period-five candidate satisfies
+\[
+a\op x=q,
+\quad
+x\op q=p,
+\quad
+x\op p=x,
+\quad
+p\op a=q, \tag{P5}
+\]
+\[
+g=a\op((b\op a)\op b),
+\qquad
+q\op((a\op q)\op a)=x,
+\qquad
+(a\op q)\op a=x\op(g\op q), \tag{P5a}
+\]
+and the exclusions
+\[
+e\notin\{x,a\},
+\qquad
+g\notin\{x,b\},
+\qquad
+s\notin\{x,q\}. \tag{P5b}
+\]
+The orbit recurrence also gives
+\[
+b\op g=a,
+\qquad
+q\op s=b,
+\qquad
+p\op a=q. \tag{P5c}
+\]
+
+If the right tail stays inside the principal orbit through $g$, then
+$g\in\{a,q,p\}$.  The three internal branches begin as follows:
+\[
+\begin{array}{rcl}
+g=q &\Longrightarrow& b\op q=a,
+\quad (a\op q)\op a=(q\op q)\op q=q\backslash x,
+\quad a\op q\ne q\op q,\vspace{1mm}\\
+g=a &\Longrightarrow& b\op a=a,
+\quad (q\op a)\op q=b\op x=a\backslash x,
+\quad q\op a\ne b,\vspace{1mm}\\
+g=p &\Longrightarrow& b\op p=a,
+\quad q\op s=b,
+\quad s\notin\{x,q\}.
+\end{array} \tag{P5d}
+\]
+These branches are good places to apply the collision rectangle (C1) by hand.
+
+\item \textbf{For period six and beyond, use uniform ground constraints.}
+If $d=6$, write
+\[
+c_0=x,
+\quad
+c_1=a,
+\quad
+c_2=b,
+\quad
+c_3=c,
+\quad
+c_4=q,
+\quad
+c_5=p,
+\]
+and put
+\[
+h=c\op x,
+\qquad
+g=q\op x.
+\]
+Then
+\[
+a\op x=q,
+\quad
+x\op q=p,
+\quad
+x\op p=x,
+\quad
+p\op a=q, \tag{P6}
+\]
+\[
+h=a\op((b\op a)\op b),
+\qquad
+g=b\op((c\op b)\op c), \tag{P6a}
+\]
+\[
+q\op((a\op q)\op a)=x,
+\qquad
+(a\op q)\op a=x\op(g\op q), \tag{P6b}
+\]
+with
+\[
+b\op x\notin\{x,a\},
+\quad
+h\notin\{x,b\},
+\quad
+g\notin\{x,c\},
+\quad
+p\op x\notin\{x,q\}. \tag{P6c}
+\]
+For longer periods, repeatedly use
+\[
+d_{k+2}=c_k\op\bigl((c_{k+1}\op c_k)\op c_{k+1}\bigr), \tag{U1}
+\]
+\[
+x=d_k\op\bigl((c_k\op d_k)\op c_k\bigr), \tag{U2}
+\]
+\[
+(c_k\op d_k)\op c_k=x\op\bigl((d_k\op x)\op d_k\bigr). \tag{U3}
+\]
+
+\item \textbf{Use the known construction atlas as search pressure.}
+The public Equation 677 database should be read as empirical calibration, not as a
+proof.  Its current finite examples all satisfy $\E{255}$, and they cluster into a few
+recognizable positive families:
+\[
+\begin{array}{ll}
+\text{linear field magmas} & x\op y=(1-\alpha)x+\alpha y,\quad \Phi_{10}(\alpha)=0,\\
+\text{Steiner line magmas} & S(2,5,n)\text{ blocks, each a copy of the unique size-5 magma},\\
+\text{pencil magmas} & \text{one pivot with a small number of size-5 petals},\\
+\text{fiber bundles} & \text{product or twisted product structure with visible fibers},\\
+\text{piecewise-linear magmas} & x\op y=x+f(y-x)\text{ with }f\text{ split by residues or cosets},\\
+\text{near-field style magmas} & \text{large }L_0,R_0\text{ cycles and non-linear field-extension behavior}.
+\end{array}
+\]
+Most of these examples are right-cancellative, and hence cannot contain a bad point of
+the kind being sought here.  The non-right-cancellative examples are still useful: they
+show how right columns can collapse while every left row remains bijective, but in every
+known case the collapses still thread the collision rectangles and preserve $\E{255}$.
+
+\item \textbf{Use minimality as pressure.}
+A smallest counterexample cannot be commutative, right-cancellative, a quasigroup, or a
+loop, because the bad right column $R_x$ misses $x$.  The bad point cannot be idempotent,
+and its $L_x$-period is at least $4$.
+
+As computational calibration only: the public database export has $841$ known finite
+$\E{677}$ magmas, all marked as satisfying $\E{255}$.  Sizes $2,3,4,6,8,10$ have been
+proved empty for $\E{677}$, while sizes $12,14,15$ remain open or only partially ruled
+out.  Bad-witness searches have found no finite counterexample through order $9$.  At
+order $10$, periods $4,5,6,8,9$ are closed in the existing search logs, leaving the broad
+period-$7$ and period-$10$ branches as the interesting order-$10$ frontier.  These facts
+should guide effort, but a proposed counterexample still needs an independent table
+check.
+
+\item \textbf{What counts as a finished counterexample.}
+A completed answer should provide a full Cayley table for $M$ and verify:
+\[
+\text{$\E{677}$ holds for all pairs }(x,y),
+\qquad
+\text{$\E{255}$ fails at the chosen point }x.
+\]
+It should also report the data
+\[
+a=x\op x,
+\quad
+q=a\op x,
+\quad
+p=x\backslash x,
+\quad
+q\op x,
+\quad
+\text{the $L_x$-period }d,
+\]
+and exhibit at least one right collision fiber satisfying the two displayed collision constraints.
+Also record the fingerprints: whether any pair-generated submagmas have size $5$; whether
+the table is translation-invariant of the form $u\op v=u+f(v-u)$ after relabelling;
+whether the right-column collisions respect visible fibers; and the cycle structures of
+$L_x$ and $R_x$ at the bad point.  If a branch is claimed impossible, the contradiction
+should use only the constraints above and left cancellation.
+\end{enumerate}
+
+\begin{goal}
+Construct a finite table satisfying all of $\E{677}$ and failing $\E{255}$, or push one
+of the named branches to contradiction.  A true counterexample must pass every local
+test above; a failed branch should explain exactly which forced equations collide.
+\end{goal}
+
+\end{document}
