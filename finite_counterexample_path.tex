@@ -425,6 +425,100 @@ the kind being sought here.  The non-right-cancellative examples are still usefu
 show how right columns can collapse while every left row remains bijective, but in every
 known case the collapses still thread the collision rectangles and preserve $\E{255}$.
 
+\item \textbf{Colored-slope lift branch.}
+One concrete counterexample route is now isolated enough to be worth exhausting by SAT.
+Let
+\[
+M=\mathbb F_p\times\mathbb F_q,
+\qquad
+(y,i)\op(x,j)=\bigl(Ay+Bx,\,O_{[y:x]}(i,j)\bigr)
+\]
+for $(y,x)\ne(0,0)$, with a separate operation on the zero fiber.  For the primary
+target
+\[
+p=19,
+\quad q=7,
+\quad A=7,
+\quad B=4,
+\quad \lambda_{\mathrm{bad}}=5,
+\]
+the affine base $y*x=7y+4x$ satisfies $\E{677}$ on $\mathbb F_{19}$, and
+\[
+1*1=11,
+\qquad 11*1=5,
+\qquad 5*1=1.
+\]
+Thus a fourth-power failure is forced if the color table at slope $5$ is
+\[
+O_5=C_3,
+\qquad
+O_4(u,v)=u+2v,
+\qquad
+O_{12}(u,v)=6u+2v,
+\]
+and the remaining slope operations can be completed with row permutations satisfying all
+slope identities.  The seed itself passes the whole $\lambda=5$ identity:
+\[
+O_5\bigl(i,O_{12}(j,O_4(O_5(i,j),i))\bigr)=j.
+\]
+For $i=0$ this is
+\[
+O_5(0,j)=3j,
+\quad O_4(3j,0)=3j,
+\quad O_{12}(j,3j)=5j,
+\quad O_5(0,5j)=j,
+\]
+and for $i\ne0$ it is
+\[
+O_5(i,j)=j+i,
+\quad O_4(j+i,i)=j+3i,
+\quad O_{12}(j,j+3i)=j+6i,
+\quad O_5(i,j+6i)=j.
+\]
+Moreover, for $s\ne0$ the final $C_3$ row avoids $s$, so any full completion gives a
+bad point.
+
+The obstruction is not the bad slope but the coupled side block.  The slope maps force
+the simultaneous block
+\[
+\{1,2,4,6,8,12,14,16,17\},
+\]
+rather than independent repairs.  In particular, from the fixed $O_4$ and $O_{12}$ one
+gets the derived constraints
+\[
+O_{11}(O_1(i,j),i)=2(i-j),
+\]
+so each column of $O_{11}$ is a permutation and $O_1$ is determined by those columns,
+and
+\[
+O_{18}\bigl(j,O_1(6i+2j,i)\bigr)=4(j-i).
+\]
+The naive local repair
+\[
+O_6(u,v)=v,
+\qquad O_{11}(u,v)=u+v,
+\]
+with $O_{14}$ forced by $\lambda=6$, and the analogous $\lambda=17$ repair, satisfies the
+two neighboring equations but fails at the next compatibility equation $\lambda=2$ once
+$O_1$ is forced.  More generally, the affine/projection-side family
+\[
+O_{11}(u,v)=au+bv+c,
+\qquad a,b\ne0,
+\]
+together with $O_6(u,v)=v$ and the forced $O_{14}$ is UNSAT for all $6\cdot6\cdot7=252$
+cases under the primary seed.  Therefore a completion, if it exists, must make at least
+one of the $O_{11},O_6,O_{14}$ block genuinely non-affine or non-projection.
+
+The search file is \texttt{explore\_colored\_magma.py}.  It checks the slope equations,
+the full magma identity including the zero fiber, and the final $\E{255}$ failure.  Use
+the affine sweep to keep the dead repair family closed, then run deep branches over the
+remaining SAT instance.  The most useful branch variable is $O_{11}$: the primary seed
+has a homogeneous color-scalar symmetry, so the branch $O_{11}(0,0)=0$ plus the normalized
+nonzero branch $O_{11}(0,0)=1$ covers the same quotient as all nonzero values.  For
+machine exhaustion, split an entire column of $O_{11}$ into permutations and shard it
+across workers; this is a partition of the remaining search, not an extra mathematical
+assumption.
+
 \item \textbf{Use minimality as pressure.}
 A smallest counterexample cannot be commutative, right-cancellative, a quasigroup, or a
 loop, because the bad right column $R_x$ misses $x$.  The bad point cannot be idempotent,
