@@ -51,6 +51,12 @@ Use the repository virtualenv:
 & .\.venv\Scripts\python.exe scripts\e677_db_analyze.py manifest
 & .\.venv\Scripts\python.exe scripts\e677_z3_search.py db-frontier --max-size 40
 & .\.venv\Scripts\python.exe scripts\e677_z3_search.py piecewise-prime --prime 127 --qr-slope 58 --nqr-slope 29
+& .\.venv\Scripts\python.exe scripts\e677_construct.py linear-bases --max-prime 200
+& .\.venv\Scripts\python.exe scripts\e677_construct.py translation --max-order 8 --max-hits 20
+& .\.venv\Scripts\python.exe scripts\e677_construct.py polynomial-translation --max-prime 17 --degree 3 --zero-value 0
+& .\.venv\Scripts\python.exe scripts\e677_construct.py affine-colors --prime 19 --q 7 --alpha 7 --beta 4 --max-models 5
+& .\.venv\Scripts\python.exe scripts\e677_construct.py colored-candidates --max-prime 200 --q 7 --top 30 --show-commands
+& .\run_colored_candidate_sweep.ps1 -ConflictBudget 2000000 -ProgressConflicts 50000
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode affine-o11-projection-sweep --solver cadical --out ""
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode deep --solver cadical --primary-o11-symmetry --branch-o11-column 0 --branch-mod 8 --branch-index 0 --log run_logs\colored_magma\primary_o11_col0_shard0.jsonl --out run_logs\colored_magma\primary_solution.json
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode dimacs --symbreak-o11-00 0 --cnf-out run_logs\colored_magma\primary_o11_00.cnf

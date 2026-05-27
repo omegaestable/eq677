@@ -1,29 +1,35 @@
 #!/usr/bin/env python3
 """
-Search/prune finite colored-slope magmas for the identity
+Tuned SAT search for finite colored-slope magmas for Equation 677.
 
+Identity:
     x = y * (x * ((y * x) * y))
 
-in the construction M = F_p x F_q with
+Colored-slope construction:
+    M = F_p x F_q
+    (y,i) * (x,j) = (A*y + B*x, O_[y:x](i,j))  for (y,x) != (0,0)
 
-    (y,i) * (x,j) = (A*y + B*x, O_[y:x](i,j))
-
-for (y,x) != (0,0), and a separate bullet operation at (0,0).
-
-The primary target encoded here is:
+Primary target:
     p=19, q=7, A=7, B=4, bad slope 5,
     O_5 = C_3,
     O_4(u,v)=u+2v, O_12(u,v)=6u+2v.
 
-The script has four intended uses:
-    1. run pruned UNSAT sweeps for tempting subfamilies;
-    2. run the remaining SAT instance with the same pruning and dump any model found;
-    3. split the residual SAT instance into exhaustive branches for deep runs;
-    4. export branch CNFs for external/native SAT solvers.
+This tuned version keeps the same mathematical target as the original script, but changes
+how the SAT instance is built and searched:
 
-Dependencies:
+  * fixed seed cells are treated as constants, not SAT variables;
+  * every generated clause is simplified immediately against fixed cells;
+  * primary derived identities for lambda in {1,5,6,12} can replace their full q^5
+    encodings, removing redundant clauses while preserving the same constraints under
+    the row-permutation axioms;
+  * branch pre-propagation can kill many deep branches before a full solve;
+  * deep mode defaults to an O_11-column split for the primary instance, matching the
+    theory note that O_11 is the useful branch variable.
+
+Dependencies for solving/exporting through PySAT solvers:
     pip install python-sat[pblib,aiger]
-The execution environment used for this file already has python-sat installed.
+
+The --mode maps and --mode stats paths do not require PySAT.
 """
 
 from __future__ import annotations
@@ -35,13 +41,12 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-
-from pysat.formula import IDPool
-from pysat.solvers import Cadical195, Glucose42, Kissat404, MapleChrono, Minisat22
-
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
 INF_NAME = "inf"
+TRUE_LIT: Optional[int] = None
+FALSE_LIT = 0
+InternalLit = Optional[int]  # None means satisfied literal; 0 means false literal.
 
 
 @dataclass(frozen=True)
@@ -205,7 +210,6 @@ def slope_maps(p: int, A: int, B: int) -> Tuple[List[int], List[int], List[int]]
     omega: List[int] = []
     for lam in labels:
         if lam == INF:
-            # y=1, x=0
             mu.append(A % p)
             nu.append(0 if C != 0 else INF)
             omega.append(INF if E == 0 else inv_mod(E, p))
@@ -240,9 +244,34 @@ def c3_row(q: int, i: int) -> Tuple[int, ...]:
 
 def bullet(q: int, i: int, j: int) -> int:
     if q != 7:
-        # The script only uses the provided good bullet for q=7.
         raise ValueError("bullet is only configured for q=7")
     return (4 * i + 3 * j) % q
+
+
+class VarPool:
+    """Small custom variable pool.
+
+    The original IDPool is convenient, but this search touches millions of literals.
+    A tiny tuple-key pool avoids importing PySAT for non-solver modes and gives us direct
+    control over fixed cells.
+    """
+
+    def __init__(self) -> None:
+        self.top = 0
+        self._ids: Dict[Tuple[int, int, int, int], int] = {}
+        self._keys: Dict[int, Tuple[int, int, int, int]] = {}
+
+    def id(self, key: Tuple[int, int, int, int]) -> int:
+        old = self._ids.get(key)
+        if old is not None:
+            return old
+        self.top += 1
+        self._ids[key] = self.top
+        self._keys[self.top] = key
+        return self.top
+
+    def key(self, var: int) -> Tuple[int, int, int, int]:
+        return self._keys[var]
 
 
 class CNFBuilder:
@@ -251,6 +280,7 @@ class CNFBuilder:
         cfg: Config,
         strong_primary_prunes: bool = True,
         lambda6_row_prunes: bool = True,
+        replace_derived_identities: bool = True,
         progress: Optional[ProgressLogger] = None,
     ) -> None:
         self.cfg = cfg
@@ -258,41 +288,119 @@ class CNFBuilder:
         self.q = cfg.q
         self.labels = labels_for(cfg.p)
         self.mu, self.nu, self.omega = slope_maps(cfg.p, cfg.A, cfg.B)
-        self.vpool = IDPool()
+        self.vpool = VarPool()
         self.clauses: List[List[int]] = []
         self.fixed: Dict[Tuple[int, int, int], int] = {}
         self.strong_primary_prunes = strong_primary_prunes
         self.lambda6_row_prunes = lambda6_row_prunes
+        self.replace_derived_identities = replace_derived_identities
         self.progress = progress or ProgressLogger(enabled=False)
+        self.trivial_clauses = 0
+        self.false_literals_removed = 0
+        self.duplicate_literals_removed = 0
+        self.contradiction: Optional[str] = None
 
-    def X(self, a: int, i: int, j: int, v: int) -> int:
-        return self.vpool.id(("X", a, i, j, v))
-
-    def add(self, clause: Sequence[int]) -> None:
-        self.clauses.append(list(clause))
+    def use_primary_prunes(self) -> bool:
+        return self.strong_primary_prunes and self.cfg.seed_primary and self.cfg.p == 19 and self.cfg.q == 7
 
     def use_primary_lambda6_prunes(self) -> bool:
         return (
-            self.strong_primary_prunes
-            and self.cfg.seed_primary
-            and self.cfg.p == 19
-            and self.cfg.q == 7
+            self.use_primary_prunes()
             and self.mu[6] == 14
             and self.nu[6] == 5
             and self.omega[6] == 11
         )
 
-    def inverse_c3_value(self, row: int, output: int) -> int:
-        if row == 0:
-            return (5 * output) % self.q
-        return (output - row) % self.q
+    def covered_primary_identity_slopes(self) -> set[int]:
+        if not (self.use_primary_prunes() and self.replace_derived_identities):
+            return set()
+        covered = {1, 5, 12}
+        if self.use_primary_lambda6_prunes():
+            covered.add(6)
+        return covered
 
-    def exactly_one(self, lits: Sequence[int]) -> None:
-        lits = list(lits)
-        self.add(lits)
-        for r in range(len(lits)):
-            for s in range(r + 1, len(lits)):
-                self.add([-lits[r], -lits[s]])
+    def X(self, a: int, i: int, j: int, v: int) -> int:
+        """Return a SAT variable for an unfixed cell value.
+
+        Do not call this for assumptions on possibly fixed cells.  Use
+        assumption_lit_for_cell instead.
+        """
+        if (a, i, j) in self.fixed:
+            raise ValueError(f"attempted to create a variable for fixed {cell_desc(self.cfg, a, i, j, v)}")
+        return self.vpool.id((a, i, j, v % self.q))
+
+    def variable_if_unfixed(self, a: int, i: int, j: int, v: int) -> int:
+        return self.vpool.id((a, i, j, v % self.q))
+
+    def cell_lit(self, a: int, i: int, j: int, v: int, positive: bool = True) -> InternalLit:
+        v %= self.q
+        fixed_value = self.fixed.get((a, i, j))
+        if fixed_value is not None:
+            truth = fixed_value == v
+            if positive:
+                return TRUE_LIT if truth else FALSE_LIT
+            return FALSE_LIT if truth else TRUE_LIT
+        var = self.variable_if_unfixed(a, i, j, v)
+        return var if positive else -var
+
+    def assumption_lit_for_cell(self, a: int, i: int, j: int, value: int) -> Optional[int]:
+        lit = self.cell_lit(a, i, j, value, positive=True)
+        if lit is TRUE_LIT:
+            return None
+        if lit == FALSE_LIT:
+            raise ValueError(f"assumption contradicts fixed seed: {cell_desc(self.cfg, a, i, j, value)}")
+        return lit
+
+    def add_clause(self, lits: Sequence[InternalLit], reason: str = "") -> None:
+        if self.contradiction is not None:
+            return
+        seen: set[int] = set()
+        out: List[int] = []
+        for lit in lits:
+            if lit is TRUE_LIT:
+                self.trivial_clauses += 1
+                return
+            if lit == FALSE_LIT:
+                self.false_literals_removed += 1
+                continue
+            assert lit is not None
+            if -lit in seen:
+                self.trivial_clauses += 1
+                return
+            if lit in seen:
+                self.duplicate_literals_removed += 1
+                continue
+            seen.add(lit)
+            out.append(lit)
+        if not out:
+            self.contradiction = reason or "empty clause generated"
+            self.clauses.append([])
+            return
+        self.clauses.append(out)
+
+    def exactly_one(self, lits: Sequence[InternalLit], reason: str = "") -> None:
+        normalized: List[int] = []
+        true_seen = False
+        seen: set[int] = set()
+        for lit in lits:
+            if lit is TRUE_LIT:
+                true_seen = True
+            elif lit == FALSE_LIT:
+                self.false_literals_removed += 1
+            else:
+                assert lit is not None
+                if lit not in seen:
+                    seen.add(lit)
+                    normalized.append(lit)
+        if true_seen:
+            for lit in normalized:
+                self.add_clause([-lit], reason=reason)
+            return
+        self.add_clause(normalized, reason=reason)
+        for r in range(len(normalized)):
+            lr = normalized[r]
+            for s in range(r + 1, len(normalized)):
+                self.add_clause([-lr, -normalized[s]], reason=reason)
 
     def fix(self, a: int, i: int, j: int, value: int) -> None:
         value %= self.q
@@ -305,12 +413,10 @@ class CNFBuilder:
     def apply_seed(self) -> None:
         self.progress.log("CNF seed: fixing the bad slope operation")
         q = self.q
-        # Critical bad slope is always C_3.
         for i in range(q):
             for j in range(q):
                 self.fix(self.cfg.bad, i, j, c3_row(q, i)[j])
 
-        # Primary fixed seed O_4 and O_12.
         if self.cfg.seed_primary:
             self.progress.log("CNF seed: fixing primary O_4 and O_12 operations")
             for i in range(q):
@@ -318,6 +424,27 @@ class CNFBuilder:
                     self.fix(4, i, j, i + 2 * j)
                     self.fix(12, i, j, 6 * i + 2 * j)
         self.progress.log(f"CNF seed complete: fixed_cells={len(self.fixed)}")
+
+    def fixed_matrix_complete(self, a: int) -> bool:
+        return all((a, i, j) in self.fixed for i in range(self.q) for j in range(self.q))
+
+    def verify_covered_fixed_identity(self, lam: int) -> None:
+        q = self.q
+        m = self.mu[lam]
+        n = self.nu[lam]
+        w = self.omega[lam]
+        if not all(self.fixed_matrix_complete(a) for a in (lam, m, n, w)):
+            return
+        for i in range(q):
+            for j in range(q):
+                t = self.fixed[(lam, i, j)]
+                u = self.fixed[(m, t, i)]
+                v = self.fixed[(n, j, u)]
+                out = self.fixed[(w, i, v)]
+                if out != j:
+                    self.contradiction = f"fixed identity lambda={label_name(lam, self.p)} fails at i={i}, j={j}"
+                    self.add_clause([], reason=self.contradiction)
+                    return
 
     def add_cell_and_row_constraints(self) -> None:
         q = self.q
@@ -329,15 +456,12 @@ class CNFBuilder:
             for i in range(q):
                 for j in range(q):
                     if (a, i, j) in self.fixed:
-                        vv = self.fixed[(a, i, j)]
-                        self.add([self.X(a, i, j, vv)])
-                        for v in range(q):
-                            if v != vv:
-                                self.add([-self.X(a, i, j, v)])
-                    else:
-                        self.exactly_one([self.X(a, i, j, v) for v in range(q)])
+                        continue
+                    self.exactly_one(
+                        [self.cell_lit(a, i, j, v, positive=True) for v in range(q)],
+                        reason=f"cell exactly-one O_{label_name(a,self.p)}[{i},{j}]",
+                    )
 
-        # Row-permutation condition: for every operation row, each value appears once.
         for label_index, a in enumerate(self.labels, start=1):
             self.progress.log(
                 f"CNF row permutations: O_{label_name(a, self.p)} "
@@ -345,52 +469,118 @@ class CNFBuilder:
             )
             for i in range(q):
                 for v in range(q):
-                    self.exactly_one([self.X(a, i, j, v) for j in range(q)])
+                    fixed_cols = [j for j in range(q) if self.fixed.get((a, i, j)) == v]
+                    if len(fixed_cols) > 1:
+                        self.contradiction = (
+                            f"fixed row repeats value {v}: O_{label_name(a,self.p)} row {i}, "
+                            f"cols={fixed_cols}"
+                        )
+                        self.add_clause([], reason=self.contradiction)
+                        return
+                    unfixed_lits = [
+                        self.cell_lit(a, i, j, v, positive=True)
+                        for j in range(q)
+                        if (a, i, j) not in self.fixed
+                    ]
+                    if fixed_cols:
+                        for lit in unfixed_lits:
+                            if lit in (TRUE_LIT, FALSE_LIT):
+                                self.add_clause([lit], reason="row fixed value exclusion")
+                            else:
+                                assert lit is not None
+                                self.add_clause([-lit], reason="row fixed value exclusion")
+                    else:
+                        self.exactly_one(
+                            unfixed_lits,
+                            reason=f"row permutation O_{label_name(a,self.p)}[{i},*] contains {v}",
+                        )
 
     def add_identity_constraints(self) -> None:
         q = self.q
-        clauses_per_slope = q ** 5
+        covered = self.covered_primary_identity_slopes()
+        clauses_per_slope_raw = q ** 5
         for label_index, lam in enumerate(self.labels, start=1):
-            if lam == 6 and self.use_primary_lambda6_prunes():
+            if lam in covered:
+                self.verify_covered_fixed_identity(lam)
                 self.progress.log(
-                    "CNF identity: lambda=6 skipped; using derived primary lambda=6 prunes"
+                    f"CNF identity: lambda={label_name(lam, self.p)} skipped; "
+                    "covered by primary derived constraints/fixed seed"
                 )
                 continue
+            # If all four operations are fixed, check and skip instead of emitting q^5 tautologies.
+            if all(self.fixed_matrix_complete(a) for a in (lam, self.mu[lam], self.nu[lam], self.omega[lam])):
+                self.verify_covered_fixed_identity(lam)
+                self.progress.log(
+                    f"CNF identity: lambda={label_name(lam, self.p)} fixed and checked; no clauses emitted"
+                )
+                continue
+
             m = self.mu[lam]
             n = self.nu[lam]
             w = self.omega[lam]
             before = len(self.clauses)
+            triv_before = self.trivial_clauses
+            false_before = self.false_literals_removed
             self.progress.log(
                 f"CNF identity: lambda={label_name(lam, self.p)} "
                 f"({label_index}/{len(self.labels)}), "
                 f"mu={label_name(m, self.p)}, nu={label_name(n, self.p)}, "
-                f"omega={label_name(w, self.p)}, adding {clauses_per_slope} clauses"
+                f"omega={label_name(w, self.p)}, raw={clauses_per_slope_raw}"
             )
             for i in range(q):
                 for j in range(q):
                     for t in range(q):
+                        lit1 = self.cell_lit(lam, i, j, t, positive=False)
+                        if lit1 is TRUE_LIT:
+                            self.trivial_clauses += q * q
+                            continue
                         for u in range(q):
+                            lit2 = self.cell_lit(m, t, i, u, positive=False)
+                            if lit2 is TRUE_LIT:
+                                self.trivial_clauses += q
+                                continue
                             for v in range(q):
-                                self.add([
-                                    -self.X(lam, i, j, t),
-                                    -self.X(m, t, i, u),
-                                    -self.X(n, j, u, v),
-                                    self.X(w, i, v, j),
-                                ])
+                                self.add_clause(
+                                    [
+                                        lit1,
+                                        lit2,
+                                        self.cell_lit(n, j, u, v, positive=False),
+                                        self.cell_lit(w, i, v, j, positive=True),
+                                    ],
+                                    reason=f"identity lambda={label_name(lam,self.p)}",
+                                )
             self.progress.log(
                 f"CNF identity: lambda={label_name(lam, self.p)} complete, "
-                f"clauses_added={len(self.clauses) - before}, total_clauses={len(self.clauses)}"
+                f"clauses_added={len(self.clauses) - before}, "
+                f"tautologies_skipped={self.trivial_clauses - triv_before}, "
+                f"false_lits_removed={self.false_literals_removed - false_before}, "
+                f"total_clauses={len(self.clauses)}"
             )
+
+    def inverse_c3_value(self, row: int, output: int) -> int:
+        if row == 0:
+            return (5 * output) % self.q
+        return (output - row) % self.q
+
+    def add_equiv_cells(self, left: Tuple[int, int, int, int], right: Tuple[int, int, int, int], reason: str) -> None:
+        a1, i1, j1, v1 = left
+        a2, i2, j2, v2 = right
+        self.add_clause([
+            self.cell_lit(a1, i1, j1, v1, positive=False),
+            self.cell_lit(a2, i2, j2, v2, positive=True),
+        ], reason=reason)
+        self.add_clause([
+            self.cell_lit(a2, i2, j2, v2, positive=False),
+            self.cell_lit(a1, i1, j1, v1, positive=True),
+        ], reason=reason)
 
     def add_primary_lambda6_prunes(self) -> None:
         """Derived lambda=6 clauses for the primary seed.
 
-        For lambda=6, mu=14, nu=5, omega=11, so the identity is
+        For lambda=6, mu=14, nu=5, omega=11:
             O_11(i, O_5(j, O_14(O_6(i,j), i))) = j.
-        Since O_5 is fixed to C_3 and rows of O_11 are permutations, choosing
-        O_11(i,t)=j and O_6(i,j)=r directly forces O_14(r,i) to the inverse
-        C_3-row image of t.  The row-repeat clauses below pre-resolve the
-        resulting O_14 row permutation conflicts.
+        With O_5 fixed and O_11 rows permutations, choosing O_11(i,t)=j and
+        O_6(i,j)=r directly forces O_14(r,i)=C_3_row_j^{-1}(t).
         """
         if not self.use_primary_lambda6_prunes():
             return
@@ -410,11 +600,11 @@ class CNFBuilder:
                 for t in range(q):
                     forced_value = self.inverse_c3_value(j, t)
                     for r in range(q):
-                        self.add([
-                            -self.X(11, i, t, j),
-                            -self.X(6, i, j, r),
-                            self.X(14, r, i, forced_value),
-                        ])
+                        self.add_clause([
+                            self.cell_lit(11, i, t, j, positive=False),
+                            self.cell_lit(6, i, j, r, positive=False),
+                            self.cell_lit(14, r, i, forced_value, positive=True),
+                        ], reason="primary lambda=6 direct")
         direct_added = len(self.clauses) - direct_before
 
         repeat_before = len(self.clauses)
@@ -426,12 +616,12 @@ class CNFBuilder:
                         for same_value_pairs in forced_by_value:
                             for j, t in same_value_pairs:
                                 for ell, u in same_value_pairs:
-                                    self.add([
-                                        -self.X(11, i, t, j),
-                                        -self.X(6, i, j, r),
-                                        -self.X(11, k, u, ell),
-                                        -self.X(6, k, ell, r),
-                                    ])
+                                    self.add_clause([
+                                        self.cell_lit(11, i, t, j, positive=False),
+                                        self.cell_lit(6, i, j, r, positive=False),
+                                        self.cell_lit(11, k, u, ell, positive=False),
+                                        self.cell_lit(6, k, ell, r, positive=False),
+                                    ], reason="primary lambda=6 row-repeat")
         else:
             self.progress.log("CNF primary lambda=6 prunes: row-repeat nogoods disabled")
         repeat_added = len(self.clauses) - repeat_before
@@ -442,61 +632,66 @@ class CNFBuilder:
         )
 
     def add_primary_prunes(self) -> None:
-        """Extra implications valid for the primary seed.
+        """Extra consequences valid for the primary p=19, q=7 seed.
 
-        These are not assumptions. They are consequences of the fixed O_4 and O_12.
-
-        lambda=1 gives
+        lambda=1:
             O_11(O_1(i,j), i) = 2(i-j).
-        Hence each column of O_11 is a permutation, and O_1 is determined by
-        those columns.
+        Hence each column of O_11 is a permutation and O_1 is determined by those columns.
 
-        lambda=12 gives
+        lambda=12:
             O_18(j, O_1(6i+2j, i)) = 4(j-i).
 
-        lambda=6 gives direct O_14 forcing clauses and row-repeat nogoods for
-        the O_11/O_6 block.
+        lambda=6:
+            direct O_14 forcing clauses and row-repeat nogoods for the O_11/O_6 block.
         """
-        if not self.cfg.seed_primary or self.cfg.p != 19 or self.cfg.q != 7:
+        if not self.use_primary_prunes():
             self.progress.log("CNF primary prunes: skipped for this config")
             return
         before = len(self.clauses)
-        self.progress.log("CNF primary prunes: adding lambda=1 and lambda=12 consequences")
+        self.progress.log("CNF primary prunes: adding lambda=1/lambda=12/lambda=6 consequences")
         q = self.q
-        # lambda=1 equivalence.
+
         for i in range(q):
             for j in range(q):
                 val = (2 * (i - j)) % q
                 for r in range(q):
-                    self.add([-self.X(1, i, j, r), self.X(11, r, i, val)])
-                    self.add([-self.X(11, r, i, val), self.X(1, i, j, r)])
+                    self.add_equiv_cells(
+                        (1, i, j, r),
+                        (11, r, i, val),
+                        reason="primary lambda=1 equivalence",
+                    )
 
-        # Columns of O_11 are permutations.
-        for i in range(q):
+        for col in range(q):
             for v in range(q):
-                self.exactly_one([self.X(11, r, i, v) for r in range(q)])
+                self.exactly_one(
+                    [self.cell_lit(11, r, col, v, positive=True) for r in range(q)],
+                    reason=f"primary O_11 column {col} contains {v}",
+                )
 
-        # lambda=12 implications. The converse is also safe because for fixed
-        # row j and rhs, i is unique.
         for i in range(q):
             for j in range(q):
                 row = (6 * i + 2 * j) % q
                 rhs = (4 * (j - i)) % q
                 for u in range(q):
-                    self.add([-self.X(1, row, i, u), self.X(18, j, u, rhs)])
-                    self.add([-self.X(18, j, u, rhs), self.X(1, row, i, u)])
+                    self.add_equiv_cells(
+                        (1, row, i, u),
+                        (18, j, u, rhs),
+                        reason="primary lambda=12 equivalence",
+                    )
+
         self.add_primary_lambda6_prunes()
         self.progress.log(
             f"CNF primary prunes complete: clauses_added={len(self.clauses) - before}, "
             f"total_clauses={len(self.clauses)}"
         )
 
-    def build(self) -> Tuple[List[List[int]], IDPool]:
+    def build(self) -> Tuple[List[List[int]], VarPool]:
         build_start = time.time()
         self.progress.log(
             f"CNF build started: config={self.cfg.name}, p={self.p}, q={self.q}, "
             f"strong_primary_prunes={self.strong_primary_prunes}, "
-            f"lambda6_row_prunes={self.lambda6_row_prunes}"
+            f"lambda6_row_prunes={self.lambda6_row_prunes}, "
+            f"replace_derived_identities={self.replace_derived_identities}"
         )
         self.apply_seed()
         before = len(self.clauses)
@@ -517,12 +712,23 @@ class CNFBuilder:
             self.progress.log("CNF primary prunes: disabled by --no-strong-prunes")
         self.progress.log(
             f"CNF build finished in {format_seconds(time.time() - build_start)}: "
-            f"vars={self.vpool.top}, clauses={len(self.clauses)}"
+            f"vars={self.vpool.top}, clauses={len(self.clauses)}, "
+            f"tautologies_skipped={self.trivial_clauses}, "
+            f"false_lits_removed={self.false_literals_removed}"
         )
+        if self.contradiction is not None:
+            self.progress.log(f"CNF contains contradiction: {self.contradiction}")
         return self.clauses, self.vpool
 
 
 def solver_class(name: str):
+    try:
+        from pysat.solvers import Cadical195, Glucose42, Kissat404, MapleChrono, Minisat22
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "PySAT is required for solving. Install with: pip install 'python-sat[pblib,aiger]'"
+        ) from exc
+
     table = {
         "cadical": Cadical195,
         "glucose": Glucose42,
@@ -549,6 +755,22 @@ def solver_supports_limited(solver) -> bool:
     return hasattr(solver, "conf_budget") and hasattr(solver, "solve_limited")
 
 
+def solver_propagate(solver, assumptions: Sequence[int]) -> Optional[Tuple[bool, List[int]]]:
+    if not hasattr(solver, "propagate"):
+        return None
+    try:
+        ok, props = solver.propagate(assumptions=list(assumptions))
+        return bool(ok), list(props)
+    except TypeError:
+        try:
+            ok, props = solver.propagate(list(assumptions))
+            return bool(ok), list(props)
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
 def solve_with_progress(
     solver,
     assumptions: Sequence[int],
@@ -556,7 +778,7 @@ def solve_with_progress(
     progress: ProgressLogger,
     label: str,
 ):
-    assumption_list = list(assumptions)
+    assumption_list = [lit for lit in assumptions if lit]
     hard_conflict_budget = args.conflicts
 
     if hard_conflict_budget:
@@ -612,20 +834,29 @@ def solve_with_progress(
     return result
 
 
+def append_cell_assumption(assumptions: List[int], builder: CNFBuilder, a: int, i: int, j: int, value: int) -> None:
+    lit = builder.assumption_lit_for_cell(a, i, j, value)
+    if lit is not None:
+        assumptions.append(lit)
+
+
 def base_assumptions(cfg: Config, builder: CNFBuilder, args: argparse.Namespace) -> List[int]:
     assumptions: List[int] = []
 
     if args.symbreak_o11_00 is not None:
         if not cfg.seed_primary or cfg.q != 7:
             raise SystemExit("O11 symmetry break only applies to the primary q=7 seed")
-        assumptions.append(builder.X(11, 0, 0, args.symbreak_o11_00))
+        try:
+            append_cell_assumption(assumptions, builder, 11, 0, 0, args.symbreak_o11_00)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
 
     for spec in args.assume_cell or []:
         try:
             a, i, j, value = parse_assume_cell(spec, cfg)
+            append_cell_assumption(assumptions, builder, a, i, j, value)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
-        assumptions.append(builder.X(a, i, j, value))
 
     return assumptions
 
@@ -649,7 +880,11 @@ def matrix_from_model(cfg: Config, builder: CNFBuilder, model: Iterable[int]) ->
         for i in range(q):
             row: List[int] = []
             for j in range(q):
-                vals = [v for v in range(q) if builder.X(a, i, j, v) in positive]
+                fixed = builder.fixed.get((a, i, j))
+                if fixed is not None:
+                    row.append(fixed)
+                    continue
+                vals = [v for v in range(q) if builder.variable_if_unfixed(a, i, j, v) in positive]
                 if len(vals) != 1:
                     raise RuntimeError(f"bad decoded cell O_{label_name(a,cfg.p)}[{i},{j}] -> {vals}")
                 row.append(vals[0])
@@ -680,7 +915,6 @@ def op_M(cfg: Config, O: Dict[int, List[List[int]]], left: Tuple[int, int], righ
 
 def verify_solution(cfg: Config, O: Dict[int, List[List[int]]], verbose: bool = True) -> Tuple[bool, Optional[Tuple[int, int]]]:
     q = cfg.q
-    # Row-permutation check.
     for a, mat in O.items():
         for i, row in enumerate(mat):
             if sorted(row) != list(range(q)):
@@ -688,7 +922,6 @@ def verify_solution(cfg: Config, O: Dict[int, List[List[int]]], verbose: bool = 
                     print(f"row is not a permutation: O_{label_name(a,cfg.p)} row {i}: {row}")
                 return False, None
 
-    # Slope identity check.
     mu, nu, omega = slope_maps(cfg.p, cfg.A, cfg.B)
     for lam in labels_for(cfg.p):
         for i in range(q):
@@ -702,7 +935,6 @@ def verify_solution(cfg: Config, O: Dict[int, List[List[int]]], verbose: bool = 
                         print("slope identity fails", lam, i, j, "got", out)
                     return False, None
 
-    # Full magma identity, including the bullet fiber.
     elems = [(x, c) for x in range(cfg.p) for c in range(q)]
     for X in elems:
         for Y in elems:
@@ -750,46 +982,47 @@ def print_operations(cfg: Config, O: Dict[int, List[List[int]]]) -> None:
 
 
 def affine_o11_projection_assumptions(builder: CNFBuilder, a: int, b: int, c: int) -> List[int]:
-    """Assumptions for a pruned primary subfamily.
-
-    O_11(row,col) = a*row + b*col + c, with a,b != 0.
-    lambda=1 then forces O_1.  Also set O_6(u,v)=v and force O_14
-    from lambda=6.  This is exactly the tempting projection-side repair family.
-    """
     q = builder.q
     ia = inv_mod(a, q)
     ib = inv_mod(b, q)
     ass: List[int] = []
     for i in range(q):
         for j in range(q):
-            ass.append(builder.X(11, i, j, (a * i + b * j + c) % q))
+            append_cell_assumption(ass, builder, 11, i, j, (a * i + b * j + c) % q)
             forced_o1 = (ia * ((2 - b) * i - 2 * j - c)) % q
-            ass.append(builder.X(1, i, j, forced_o1))
-            ass.append(builder.X(6, i, j, j))
-            # O_14(row=k, col=ii) forced by lambda=6.
+            append_cell_assumption(ass, builder, 1, i, j, forced_o1)
+            append_cell_assumption(ass, builder, 6, i, j, j)
             k, ii = i, j
             if k == 0:
                 val = (5 * ib * (-a * ii - c)) % q
             else:
                 val = (ib * (k - a * ii - c) - k) % q
-            ass.append(builder.X(14, i, j, val))
+            append_cell_assumption(ass, builder, 14, i, j, val)
     return ass
+
+
+def new_builder(cfg: Config, args: argparse.Namespace, progress: ProgressLogger) -> CNFBuilder:
+    return CNFBuilder(
+        cfg,
+        strong_primary_prunes=not args.no_strong_prunes,
+        lambda6_row_prunes=not args.no_lambda6_row_prunes,
+        replace_derived_identities=not args.no_replace_derived_identities,
+        progress=progress,
+    )
 
 
 def run_affine_o11_projection_sweep(cfg: Config, args: argparse.Namespace) -> int:
     if not cfg.seed_primary or cfg.q != 7:
         raise SystemExit("the affine O11 projection sweep is only implemented for the primary q=7 seed")
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(
-        cfg,
-        strong_primary_prunes=True,
-        lambda6_row_prunes=not args.no_lambda6_row_prunes,
-        progress=progress,
-    )
+    builder = new_builder(cfg, args, progress)
     clauses, _ = builder.build()
     S = solver_class(args.solver)
-    print(f"CNF: vars={builder.vpool.top} clauses={len(clauses)}")
+    print(f"CNF: vars={builder.vpool.top} clauses={len(clauses)} contradiction={builder.contradiction}")
     print("Sweeping 252 cases: O_11 affine, O_6(u,v)=v, O_14 forced by lambda=6")
+    if builder.contradiction is not None:
+        print(f"Base CNF is contradictory: {builder.contradiction}")
+        return 1
     start = time.time()
     with S(bootstrap_with=clauses) as solver:
         count = 0
@@ -799,6 +1032,15 @@ def run_affine_o11_projection_sweep(cfg: Config, args: argparse.Namespace) -> in
                     count += 1
                     ass = affine_o11_projection_assumptions(builder, a, b, c)
                     progress.log(f"sweep case {count}/252 starts: a={a} b={b} c={c}")
+                    if args.propagate_branches:
+                        prop = solver_propagate(solver, ass)
+                        if prop is not None and not prop[0]:
+                            dt = time.time() - start
+                            print(
+                                f"case {count:3d}: a={a} b={b} c={c} -> unsat-prop   "
+                                f"elapsed={dt:.2f}s {eta_text(count, 252, dt)}"
+                            )
+                            continue
                     sat = solve_with_progress(solver, ass, args, progress, f"sweep case {count}/252")
                     dt = time.time() - start
                     print(
@@ -819,46 +1061,98 @@ def run_affine_o11_projection_sweep(cfg: Config, args: argparse.Namespace) -> in
 BranchChoice = Tuple[str, List[int], Dict[str, object]]
 
 
+def cell_choice(builder: CNFBuilder, cfg: Config, a: int, i: int, j: int, value: int) -> Optional[BranchChoice]:
+    try:
+        lit = builder.assumption_lit_for_cell(a, i, j, value)
+    except ValueError:
+        return None
+    lits = [] if lit is None else [lit]
+    return (
+        cell_desc(cfg, a, i, j, value),
+        lits,
+        {"kind": "cell", "slope": label_name(a, cfg.p), "row": i, "col": j, "value": value},
+    )
+
+
+def row_choice(builder: CNFBuilder, cfg: Config, a: int, i: int, perm: Sequence[int]) -> Optional[BranchChoice]:
+    lits: List[int] = []
+    try:
+        for j in range(cfg.q):
+            lit = builder.assumption_lit_for_cell(a, i, j, perm[j])
+            if lit is not None:
+                lits.append(lit)
+    except ValueError:
+        return None
+    return (
+        row_desc(cfg, a, i, perm),
+        lits,
+        {"kind": "row", "slope": label_name(a, cfg.p), "row": i, "values": list(perm)},
+    )
+
+
+def column_choice(builder: CNFBuilder, cfg: Config, a: int, j: int, perm: Sequence[int]) -> Optional[BranchChoice]:
+    lits: List[int] = []
+    try:
+        for i in range(cfg.q):
+            lit = builder.assumption_lit_for_cell(a, i, j, perm[i])
+            if lit is not None:
+                lits.append(lit)
+    except ValueError:
+        return None
+    return (
+        column_desc(cfg, a, j, perm),
+        lits,
+        {"kind": "column", "slope": label_name(a, cfg.p), "col": j, "values": list(perm)},
+    )
+
+
 def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namespace) -> List[List[BranchChoice]]:
     groups: List[List[BranchChoice]] = []
 
     branch_cells = list(args.branch_cell or [])
-    if not branch_cells and not args.branch_row and not args.branch_o11_column and args.symbreak_o11_00 is None:
+    branch_rows = list(args.branch_row or [])
+    branch_o11_columns = list(args.branch_o11_column or [])
+
+    if not branch_cells and not branch_rows and not branch_o11_columns and args.symbreak_o11_00 is None:
         if cfg.seed_primary and cfg.q == 7:
-            if args.primary_o11_symmetry:
-                branch_cells.append("11:0:0=0,1")
+            if args.default_branch == "o11-column":
+                branch_o11_columns.append("0")
+            elif args.default_branch == "cell":
+                branch_cells.append("11:0:0=0,1" if args.primary_o11_symmetry else "11:0:0")
+            elif args.default_branch == "none":
+                pass
             else:
-                branch_cells.append("11:0:0")
+                raise SystemExit(f"unknown --default-branch {args.default_branch!r}")
 
     for spec in branch_cells:
         try:
             (a, i, j), values = parse_branch_cell(spec, cfg)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
-        group: List[BranchChoice] = []
+        group = []
         for value in values:
-            group.append((
-                cell_desc(cfg, a, i, j, value),
-                [builder.X(a, i, j, value)],
-                {"kind": "cell", "slope": label_name(a, cfg.p), "row": i, "col": j, "value": value},
-            ))
+            choice = cell_choice(builder, cfg, a, i, j, value)
+            if choice is not None:
+                group.append(choice)
+        if not group:
+            raise SystemExit(f"branch cell {spec!r} has no values compatible with fixed seed")
         groups.append(group)
 
-    for spec in args.branch_row or []:
+    for spec in branch_rows:
         try:
             a, i = parse_row(spec, cfg)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
         group = []
         for perm in itertools.permutations(range(cfg.q)):
-            group.append((
-                row_desc(cfg, a, i, perm),
-                [builder.X(a, i, j, perm[j]) for j in range(cfg.q)],
-                {"kind": "row", "slope": label_name(a, cfg.p), "row": i, "values": list(perm)},
-            ))
+            choice = row_choice(builder, cfg, a, i, perm)
+            if choice is not None:
+                group.append(choice)
+        if not group:
+            raise SystemExit(f"branch row {spec!r} has no permutations compatible with fixed seed")
         groups.append(group)
 
-    for spec in args.branch_o11_column or []:
+    for spec in branch_o11_columns:
         if not cfg.seed_primary or cfg.q != 7:
             raise SystemExit("--branch-o11-column is only justified for the primary q=7 seed")
         j = int(spec)
@@ -868,17 +1162,17 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
         for perm in itertools.permutations(range(cfg.q)):
             if args.primary_o11_symmetry and j == 0 and perm[0] not in (0, 1):
                 continue
-            group.append((
-                column_desc(cfg, 11, j, perm),
-                [builder.X(11, i, j, perm[i]) for i in range(cfg.q)],
-                {"kind": "o11-column", "slope": "11", "col": j, "values": list(perm)},
-            ))
+            choice = column_choice(builder, cfg, 11, j, perm)
+            if choice is not None:
+                group.append(choice)
+        if not group:
+            raise SystemExit(f"O11 column {j} has no permutations compatible with fixed seed")
         groups.append(group)
 
     return groups
 
 
-def combined_branch_choices(groups: Sequence[Sequence[BranchChoice]]) -> Iterable[Tuple[str, List[int], List[Dict[str, object]]]]:
+def combined_branch_choices(groups: Sequence[Sequence[BranchChoice]]) -> Iterator[Tuple[str, List[int], List[Dict[str, object]]]]:
     if not groups:
         yield "unbranched", [], []
         return
@@ -910,7 +1204,7 @@ def load_completed_branches(path: Path) -> set[str]:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if rec.get("status") in {"sat", "unsat", "bad-model", "verified-sat"} and isinstance(rec.get("branch"), str):
+            if rec.get("status") in {"sat", "unsat", "unsat-prop", "bad-model", "verified-sat"} and isinstance(rec.get("branch"), str):
                 completed.add(rec["branch"])
     return completed
 
@@ -918,7 +1212,7 @@ def load_completed_branches(path: Path) -> set[str]:
 def default_deep_log_path(cfg: Config, args: argparse.Namespace) -> Path:
     stamp = time.strftime("%Y%m%d_%H%M%S")
     name = f"{cfg.name}_{args.solver}_{stamp}.jsonl"
-    return Path("run_logs") / "colored_magma" / name
+    return Path("run_logs") / "colored_magma_tuned" / name
 
 
 def solution_path_for_branch(path: Optional[str], branch_no: int, total: int) -> Optional[str]:
@@ -943,12 +1237,7 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
         raise SystemExit("--branch-index must satisfy 0 <= index < mod")
 
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(
-        cfg,
-        strong_primary_prunes=not args.no_strong_prunes,
-        lambda6_row_prunes=not args.no_lambda6_row_prunes,
-        progress=progress,
-    )
+    builder = new_builder(cfg, args, progress)
     clauses, _ = builder.build()
     base = base_assumptions(cfg, builder, args)
     groups = branch_choice_groups(cfg, builder, args)
@@ -959,7 +1248,10 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
 
     print(f"Config: {cfg}")
     print(f"base identity: {base_ok(cfg)}")
-    print(f"CNF: vars={builder.vpool.top} clauses={len(clauses)} base_assumptions={len(base)}")
+    print(
+        f"CNF: vars={builder.vpool.top} clauses={len(clauses)} base_assumptions={len(base)} "
+        f"tautologies_skipped={builder.trivial_clauses} false_lits_removed={builder.false_literals_removed}"
+    )
     print(f"Branch groups: {[len(group) for group in groups] or [1]} total={total}")
     print(f"Shard: index={args.branch_index} mod={args.branch_mod}")
     print(f"Selected local branches: {selected_total}")
@@ -969,9 +1261,12 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
     if args.resume:
         print(f"Resume: loaded {len(completed)} completed branch record(s)")
     if args.primary_o11_symmetry and cfg.seed_primary:
-        print("Using primary color-scalar symmetry: O_11(0,0)=0 or normalized to 1.")
+        print("Using primary color-scalar symmetry: O_11(0,0)=0 or normalized to 1 for column-0 splits.")
     for desc in assumption_descriptions(cfg, args):
         print(f"Base assumption: {desc}")
+    if builder.contradiction is not None:
+        print(f"Base CNF is contradictory: {builder.contradiction}")
+        return 1
 
     if args.dry_run:
         shown = 0
@@ -987,6 +1282,7 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
     unknown = 0
     solved = 0
     skipped = 0
+    prop_unsat = 0
     S = solver_class(args.solver)
     run_start = time.time()
     local_seen = 0
@@ -1002,11 +1298,11 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
                     elapsed = time.time() - run_start
                     progress.log(
                         f"branch {branch_no}/{total} local={local_seen}/{selected_total}: skipped from resume; "
-                        f"processed={solved + unknown + skipped}/{selected_total}, "
-                        f"elapsed={format_seconds(elapsed)} {eta_text(solved + unknown + skipped, selected_total, elapsed)}"
+                        f"processed={solved + unknown + skipped + prop_unsat}/{selected_total}, "
+                        f"elapsed={format_seconds(elapsed)} {eta_text(solved + unknown + skipped + prop_unsat, selected_total, elapsed)}"
                     )
                 continue
-            if args.max_branches and solved + unknown >= args.max_branches:
+            if args.max_branches and solved + unknown + prop_unsat >= args.max_branches:
                 break
 
             assumptions = base + branch_assumptions
@@ -1015,6 +1311,44 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
                 f"{description}; assumptions={len(assumptions)}"
             )
             start = time.time()
+            if args.propagate_branches:
+                prop = solver_propagate(solver, assumptions)
+                if prop is not None:
+                    ok, props = prop
+                    if not ok:
+                        elapsed = time.time() - start
+                        prop_unsat += 1
+                        print(
+                            f"branch {branch_no}/{total}: {description} -> unsat-prop "
+                            f"elapsed={elapsed:.2f}s propagated={len(props)} stats={solver_stats(solver)}"
+                        )
+                        append_jsonl(log_path, {
+                            "branch": description,
+                            "branch_no": branch_no,
+                            "total_branches": total,
+                            "details": details,
+                            "status": "unsat-prop",
+                            "elapsed_seconds": elapsed,
+                            "solver": args.solver,
+                            "stats": solver_stats(solver),
+                        })
+                        processed = solved + unknown + skipped + prop_unsat
+                        run_elapsed = time.time() - run_start
+                        progress.log(
+                            f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
+                            f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
+                            f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
+                        )
+                        continue
+                    if args.propagate_only:
+                        elapsed = time.time() - start
+                        unknown += 1
+                        print(
+                            f"branch {branch_no}/{total}: {description} -> prop-ok "
+                            f"elapsed={elapsed:.2f}s propagated={len(props)}"
+                        )
+                        continue
+
             sat = solve_with_progress(solver, assumptions, args, progress, f"branch {branch_no}/{total}")
             elapsed = time.time() - start
             status = "unknown" if sat is None else "sat" if sat else "unsat"
@@ -1039,16 +1373,14 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
                 unknown += 1
             else:
                 solved += 1
-            processed = solved + unknown + skipped
+            processed = solved + unknown + skipped + prop_unsat
             run_elapsed = time.time() - run_start
             progress.log(
                 f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
-                f"unknown={unknown}, skipped={skipped}, elapsed={format_seconds(run_elapsed)} "
-                f"{eta_text(processed, selected_total, run_elapsed)}"
+                f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
+                f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
             )
-            if sat is None:
-                continue
-            if sat is False:
+            if sat is None or sat is False:
                 continue
 
             O = matrix_from_model(cfg, builder, solver.get_model())
@@ -1069,7 +1401,7 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
 
     print(
         f"Deep run finished in {time.time() - run_start:.2f}s: "
-        f"solved={solved} unknown={unknown} skipped={skipped}"
+        f"solved={solved} prop_unsat={prop_unsat} unknown={unknown} skipped={skipped}"
     )
     if unknown:
         return 3
@@ -1079,6 +1411,7 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
 def write_dimacs(path: Path, clauses: Sequence[Sequence[int]], vars_top: int,
                  assumptions: Sequence[int], comments: Sequence[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    assumptions = [lit for lit in assumptions if lit]
     total_clauses = len(clauses) + len(assumptions)
     with path.open("w", encoding="utf-8") as f:
         for comment in comments:
@@ -1092,20 +1425,18 @@ def write_dimacs(path: Path, clauses: Sequence[Sequence[int]], vars_top: int,
 
 def run_dimacs_export(cfg: Config, args: argparse.Namespace) -> int:
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(
-        cfg,
-        strong_primary_prunes=not args.no_strong_prunes,
-        lambda6_row_prunes=not args.no_lambda6_row_prunes,
-        progress=progress,
-    )
+    builder = new_builder(cfg, args, progress)
     clauses, _ = builder.build()
     assumptions = base_assumptions(cfg, builder, args)
-    out = Path(args.cnf_out or "colored_magma.cnf")
+    out = Path(args.cnf_out or "colored_magma_tuned.cnf")
     comments = [
         f"config={cfg}",
         f"base_identity={base_ok(cfg)}",
         f"vars={builder.vpool.top}",
         f"clauses_without_assumptions={len(clauses)}",
+        f"tautologies_skipped={builder.trivial_clauses}",
+        f"false_lits_removed={builder.false_literals_removed}",
+        f"contradiction={builder.contradiction}",
     ]
     for desc in assumption_descriptions(cfg, args):
         comments.append(f"assumption {desc}")
@@ -1115,26 +1446,74 @@ def run_dimacs_export(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def run_cubes_export(cfg: Config, args: argparse.Namespace) -> int:
+    progress = progress_logger_from_args(args)
+    builder = new_builder(cfg, args, progress)
+    clauses, _ = builder.build()
+    base = base_assumptions(cfg, builder, args)
+    groups = branch_choice_groups(cfg, builder, args)
+    total = branch_count(groups)
+    out_dir = Path(args.cubes_out_dir or "colored_magma_cubes")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cnf_path = out_dir / "base.cnf"
+    cubes_path = out_dir / "cubes.txt"
+    meta_path = out_dir / "cubes.jsonl"
+    write_dimacs(cnf_path, clauses, builder.vpool.top, [], [
+        f"config={cfg}",
+        f"base_identity={base_ok(cfg)}",
+        f"vars={builder.vpool.top}",
+        f"clauses_without_assumptions={len(clauses)}",
+    ])
+    selected = 0
+    with cubes_path.open("w", encoding="utf-8") as cf, meta_path.open("w", encoding="utf-8") as mf:
+        for branch_no, (description, branch_assumptions, details) in enumerate(combined_branch_choices(groups), start=1):
+            if (branch_no - 1) % args.branch_mod != args.branch_index:
+                continue
+            assumptions = base + branch_assumptions
+            cf.write(" ".join(map(str, assumptions)) + " 0\n")
+            mf.write(json.dumps({
+                "branch_no": branch_no,
+                "total_branches": total,
+                "description": description,
+                "assumptions": assumptions,
+                "details": details,
+            }, sort_keys=True) + "\n")
+            selected += 1
+            if args.max_branches and selected >= args.max_branches:
+                break
+    print(f"wrote {cnf_path}")
+    print(f"wrote {cubes_path} with {selected} cube(s)")
+    print(f"wrote {meta_path}")
+    return 0
+
+
 def run_full_sat(cfg: Config, args: argparse.Namespace) -> int:
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(
-        cfg,
-        strong_primary_prunes=not args.no_strong_prunes,
-        lambda6_row_prunes=not args.no_lambda6_row_prunes,
-        progress=progress,
-    )
+    builder = new_builder(cfg, args, progress)
     clauses, _ = builder.build()
     assumptions = base_assumptions(cfg, builder, args)
 
-    S = solver_class(args.solver)
     print(f"Config: {cfg}")
     print(f"base identity: {base_ok(cfg)}")
-    print(f"CNF: vars={builder.vpool.top} clauses={len(clauses)} assumptions={len(assumptions)}")
+    print(
+        f"CNF: vars={builder.vpool.top} clauses={len(clauses)} assumptions={len(assumptions)} "
+        f"tautologies_skipped={builder.trivial_clauses} false_lits_removed={builder.false_literals_removed}"
+    )
     for desc in assumption_descriptions(cfg, args):
         print(f"Assumption: {desc}")
+    if builder.contradiction is not None:
+        print(f"Base CNF is contradictory: {builder.contradiction}")
+        return 1
+
+    S = solver_class(args.solver)
     start = time.time()
     progress.log(f"creating solver {args.solver} with {len(clauses)} clauses")
     with S(bootstrap_with=clauses) as solver:
+        if args.propagate_branches:
+            prop = solver_propagate(solver, assumptions)
+            if prop is not None and not prop[0]:
+                print(f"SAT result: False by propagation   elapsed={time.time() - start:.2f}s")
+                return 1
         sat = solve_with_progress(solver, assumptions, args, progress, "full solve")
         elapsed = time.time() - start
         print(f"SAT result: {sat}   elapsed={elapsed:.2f}s stats={solver_stats(solver)}")
@@ -1153,6 +1532,28 @@ def run_full_sat(cfg: Config, args: argparse.Namespace) -> int:
         return 0 if ok and witness else 2
 
 
+def run_stats(cfg: Config, args: argparse.Namespace) -> int:
+    progress = progress_logger_from_args(args)
+    builder = new_builder(cfg, args, progress)
+    clauses, _ = builder.build()
+    length_counts: Dict[int, int] = {}
+    for clause in clauses:
+        length_counts[len(clause)] = length_counts.get(len(clause), 0) + 1
+    print(f"Config: {cfg}")
+    print(f"base identity: {base_ok(cfg)}")
+    print(f"vars={builder.vpool.top}")
+    print(f"clauses={len(clauses)}")
+    print(f"clause_lengths={dict(sorted(length_counts.items()))}")
+    print(f"fixed_cells={len(builder.fixed)}")
+    print(f"tautologies_skipped={builder.trivial_clauses}")
+    print(f"false_lits_removed={builder.false_literals_removed}")
+    print(f"duplicate_literals_removed={builder.duplicate_literals_removed}")
+    print(f"contradiction={builder.contradiction}")
+    covered = sorted(label_name(a, cfg.p) for a in builder.covered_primary_identity_slopes())
+    print(f"covered_primary_identity_slopes={covered}")
+    return 0 if builder.contradiction is None else 1
+
+
 def config_from_name(name: str) -> Config:
     if name == "primary":
         return Config(name="primary", p=19, q=7, A=7, B=4, bad=5, seed_primary=True)
@@ -1161,6 +1562,20 @@ def config_from_name(name: str) -> Config:
     if name == "backup2q7":
         return Config(name="backup2q7", p=31, q=7, A=5, B=9, bad=17, seed_primary=False)
     raise SystemExit("unknown config; choose primary, backup1, or backup2q7")
+
+
+def config_from_args(args: argparse.Namespace) -> Config:
+    if args.config != "custom":
+        return config_from_name(args.config)
+    missing = [name for name in ("p", "q", "A", "B", "bad_slope") if getattr(args, name) is None]
+    if missing:
+        raise SystemExit(f"--config custom requires {', '.join('--' + name.replace('_', '-') for name in missing)}")
+    if args.p < 2 or args.q < 2:
+        raise SystemExit("custom --p and --q must be at least 2")
+    if args.bad_slope < 0 or args.bad_slope > args.p:
+        raise SystemExit("custom --bad-slope must be in 0..p, where p denotes infinity")
+    name = f"custom_p{args.p}_q{args.q}_A{args.A}_B{args.B}_bad{args.bad_slope}"
+    return Config(name=name, p=args.p, q=args.q, A=args.A, B=args.B, bad=args.bad_slope, seed_primary=False)
 
 
 def show_maps(cfg: Config) -> None:
@@ -1186,8 +1601,15 @@ def show_maps(cfg: Config) -> None:
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="primary", choices=["primary", "backup1", "backup2q7"])
-    parser.add_argument("--mode", default="full", choices=["full", "deep", "dimacs", "affine-o11-projection-sweep", "maps"])
+    parser.add_argument("--config", default="primary", choices=["primary", "backup1", "backup2q7", "custom"])
+    parser.add_argument("--p", type=int, default=None, help="custom config base field size")
+    parser.add_argument("--q", type=int, default=None, help="custom config color field size")
+    parser.add_argument("--A", type=int, default=None, help="custom config left base coefficient")
+    parser.add_argument("--B", type=int, default=None, help="custom config right base coefficient")
+    parser.add_argument("--bad-slope", type=int, default=None, help="custom config bad slope; use p for infinity")
+    parser.add_argument("--mode", default="full", choices=[
+        "full", "deep", "dimacs", "cubes", "affine-o11-projection-sweep", "maps", "stats",
+    ])
     parser.add_argument("--solver", default="cadical", choices=["cadical", "glucose", "kissat", "maple", "minisat"])
     parser.add_argument("--out", default="solution.json", help="where to write a found solution JSON; use empty string to disable")
     parser.add_argument("--conflicts", type=int, default=0, help="optional conflict budget for solvers supporting solve_limited")
@@ -1196,28 +1618,36 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
                         help="seconds between long-running solve progress reports; use 0 to print every chunk")
     parser.add_argument("--progress-conflicts", type=int, default=50000,
                         help="conflict chunk size for solve progress when --conflicts is not set; use 0 for blocking solve")
-    parser.add_argument("--no-strong-prunes", action="store_true", help="disable derived primary lambda=1/lambda=12/lambda=6 pruning")
-    parser.add_argument("--no-lambda6-row-prunes", action="store_true",
-                        help="keep the direct lambda=6 replacement but disable extra O_11/O_6 row-repeat nogoods")
+    parser.add_argument("--no-strong-prunes", action="store_true", help="disable derived primary pruning")
+    parser.add_argument("--no-lambda6-row-prunes", action="store_true", help="disable derived lambda=6 row-repeat nogoods")
+    parser.add_argument("--no-replace-derived-identities", action="store_true",
+                        help="keep full q^5 identities even when primary derived constraints cover lambda=1,5,6,12")
     parser.add_argument("--symbreak-o11-00", type=int, choices=[0, 1], default=None,
-                        help="primary only: branch on O_11(0,0)=0 or normalized nonzero value 1")
+                        help="primary only: assume O_11(0,0)=0 or normalized nonzero value 1")
     parser.add_argument("--assume-cell", action="append", default=[], metavar="L:I:J:V",
                         help="add a unit assumption O_L(i,j)=v; use L=inf for the infinite slope")
     parser.add_argument("--branch-cell", action="append", default=[], metavar="L:I:J[=V,...]",
-                        help="deep mode: split over values of a cell, or over the listed values only")
+                        help="deep mode: split over values of a cell, or over listed values only")
     parser.add_argument("--branch-row", action="append", default=[], metavar="L:I",
                         help="deep mode: split over all row permutations for O_L row i")
     parser.add_argument("--branch-o11-column", action="append", default=[], metavar="J",
-                        help="deep mode, primary only: split over all permutations of column j of O_11")
+                        help="deep/cubes mode, primary only: split over all permutations of column j of O_11")
+    parser.add_argument("--default-branch", default="o11-column", choices=["o11-column", "cell", "none"],
+                        help="deep mode default branch when no explicit branch is given")
     parser.add_argument("--primary-o11-symmetry", action="store_true",
-                        help="primary deep mode: quotient the color-scalar symmetry with O_11(0,0) in {0,1}")
-    parser.add_argument("--branch-mod", type=int, default=1, help="deep mode: run only branches with index congruent to --branch-index modulo this value")
-    parser.add_argument("--branch-index", type=int, default=0, help="deep mode: shard index used with --branch-mod")
-    parser.add_argument("--max-branches", type=int, default=0, help="deep mode: stop after this many local branches in the selected shard")
+                        help="primary deep mode: quotient color-scalar symmetry for O_11 column 0 by perm[0] in {0,1}")
+    parser.add_argument("--propagate-branches", action="store_true",
+                        help="call solver.propagate on branch assumptions before full solving")
+    parser.add_argument("--propagate-only", action="store_true",
+                        help="deep mode: only propagation-test branches; do not run full SAT solves")
+    parser.add_argument("--branch-mod", type=int, default=1, help="deep/cubes mode: run only branches with index congruent to --branch-index modulo this value")
+    parser.add_argument("--branch-index", type=int, default=0, help="deep/cubes mode: shard index used with --branch-mod")
+    parser.add_argument("--max-branches", type=int, default=0, help="deep/cubes mode: stop after this many local branches in the selected shard")
     parser.add_argument("--log", default="", help="deep mode: JSONL progress log path")
-    parser.add_argument("--resume", action="store_true", help="deep mode: skip branches already marked sat/unsat in the JSONL log")
+    parser.add_argument("--resume", action="store_true", help="deep mode: skip branches already marked complete in the JSONL log")
     parser.add_argument("--dry-run", action="store_true", help="deep mode: print selected branches without solving")
-    parser.add_argument("--cnf-out", default="", help="dimacs mode: path for the exported CNF")
+    parser.add_argument("--cnf-out", default="", help="dimacs mode: path for exported CNF")
+    parser.add_argument("--cubes-out-dir", default="", help="cubes mode: directory for base.cnf and cubes.txt")
     return parser.parse_args(argv)
 
 
@@ -1229,18 +1659,26 @@ def main(argv: Sequence[str]) -> int:
         raise SystemExit("--progress-conflicts must be nonnegative")
     if args.progress_every < 0:
         raise SystemExit("--progress-every must be nonnegative")
+    if args.branch_mod < 1:
+        raise SystemExit("--branch-mod must be positive")
+    if args.branch_index < 0 or args.branch_index >= args.branch_mod:
+        raise SystemExit("--branch-index must satisfy 0 <= index < mod")
     if args.out == "":
         args.out = None
-    cfg = config_from_name(args.config)
+    cfg = config_from_args(args)
     if args.mode == "maps":
         show_maps(cfg)
         return 0
+    if args.mode == "stats":
+        return run_stats(cfg, args)
     if args.mode == "affine-o11-projection-sweep":
         return run_affine_o11_projection_sweep(cfg, args)
     if args.mode == "deep":
         return run_deep_sat(cfg, args)
     if args.mode == "dimacs":
         return run_dimacs_export(cfg, args)
+    if args.mode == "cubes":
+        return run_cubes_export(cfg, args)
     return run_full_sat(cfg, args)
 
 
