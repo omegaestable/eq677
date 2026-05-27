@@ -250,6 +250,7 @@ class CNFBuilder:
         self,
         cfg: Config,
         strong_primary_prunes: bool = True,
+        lambda6_row_prunes: bool = True,
         progress: Optional[ProgressLogger] = None,
     ) -> None:
         self.cfg = cfg
@@ -261,6 +262,7 @@ class CNFBuilder:
         self.clauses: List[List[int]] = []
         self.fixed: Dict[Tuple[int, int, int], int] = {}
         self.strong_primary_prunes = strong_primary_prunes
+        self.lambda6_row_prunes = lambda6_row_prunes
         self.progress = progress or ProgressLogger(enabled=False)
 
     def X(self, a: int, i: int, j: int, v: int) -> int:
@@ -268,6 +270,22 @@ class CNFBuilder:
 
     def add(self, clause: Sequence[int]) -> None:
         self.clauses.append(list(clause))
+
+    def use_primary_lambda6_prunes(self) -> bool:
+        return (
+            self.strong_primary_prunes
+            and self.cfg.seed_primary
+            and self.cfg.p == 19
+            and self.cfg.q == 7
+            and self.mu[6] == 14
+            and self.nu[6] == 5
+            and self.omega[6] == 11
+        )
+
+    def inverse_c3_value(self, row: int, output: int) -> int:
+        if row == 0:
+            return (5 * output) % self.q
+        return (output - row) % self.q
 
     def exactly_one(self, lits: Sequence[int]) -> None:
         lits = list(lits)
@@ -333,6 +351,11 @@ class CNFBuilder:
         q = self.q
         clauses_per_slope = q ** 5
         for label_index, lam in enumerate(self.labels, start=1):
+            if lam == 6 and self.use_primary_lambda6_prunes():
+                self.progress.log(
+                    "CNF identity: lambda=6 skipped; using derived primary lambda=6 prunes"
+                )
+                continue
             m = self.mu[lam]
             n = self.nu[lam]
             w = self.omega[lam]
@@ -359,6 +382,65 @@ class CNFBuilder:
                 f"clauses_added={len(self.clauses) - before}, total_clauses={len(self.clauses)}"
             )
 
+    def add_primary_lambda6_prunes(self) -> None:
+        """Derived lambda=6 clauses for the primary seed.
+
+        For lambda=6, mu=14, nu=5, omega=11, so the identity is
+            O_11(i, O_5(j, O_14(O_6(i,j), i))) = j.
+        Since O_5 is fixed to C_3 and rows of O_11 are permutations, choosing
+        O_11(i,t)=j and O_6(i,j)=r directly forces O_14(r,i) to the inverse
+        C_3-row image of t.  The row-repeat clauses below pre-resolve the
+        resulting O_14 row permutation conflicts.
+        """
+        if not self.use_primary_lambda6_prunes():
+            return
+
+        q = self.q
+        before = len(self.clauses)
+        self.progress.log("CNF primary lambda=6 prunes: adding direct O_14 forcing clauses")
+        forced_by_value: List[List[Tuple[int, int]]] = [[] for _ in range(q)]
+        for j in range(q):
+            for t in range(q):
+                forced_value = self.inverse_c3_value(j, t)
+                forced_by_value[forced_value].append((j, t))
+
+        direct_before = len(self.clauses)
+        for i in range(q):
+            for j in range(q):
+                for t in range(q):
+                    forced_value = self.inverse_c3_value(j, t)
+                    for r in range(q):
+                        self.add([
+                            -self.X(11, i, t, j),
+                            -self.X(6, i, j, r),
+                            self.X(14, r, i, forced_value),
+                        ])
+        direct_added = len(self.clauses) - direct_before
+
+        repeat_before = len(self.clauses)
+        if self.lambda6_row_prunes:
+            self.progress.log("CNF primary lambda=6 prunes: adding O_11/O_6 row-repeat nogoods")
+            for i in range(q):
+                for k in range(i + 1, q):
+                    for r in range(q):
+                        for same_value_pairs in forced_by_value:
+                            for j, t in same_value_pairs:
+                                for ell, u in same_value_pairs:
+                                    self.add([
+                                        -self.X(11, i, t, j),
+                                        -self.X(6, i, j, r),
+                                        -self.X(11, k, u, ell),
+                                        -self.X(6, k, ell, r),
+                                    ])
+        else:
+            self.progress.log("CNF primary lambda=6 prunes: row-repeat nogoods disabled")
+        repeat_added = len(self.clauses) - repeat_before
+        self.progress.log(
+            "CNF primary lambda=6 prunes complete: "
+            f"direct_clauses={direct_added}, row_repeat_nogoods={repeat_added}, "
+            f"clauses_added={len(self.clauses) - before}, total_clauses={len(self.clauses)}"
+        )
+
     def add_primary_prunes(self) -> None:
         """Extra implications valid for the primary seed.
 
@@ -371,6 +453,9 @@ class CNFBuilder:
 
         lambda=12 gives
             O_18(j, O_1(6i+2j, i)) = 4(j-i).
+
+        lambda=6 gives direct O_14 forcing clauses and row-repeat nogoods for
+        the O_11/O_6 block.
         """
         if not self.cfg.seed_primary or self.cfg.p != 19 or self.cfg.q != 7:
             self.progress.log("CNF primary prunes: skipped for this config")
@@ -400,6 +485,7 @@ class CNFBuilder:
                 for u in range(q):
                     self.add([-self.X(1, row, i, u), self.X(18, j, u, rhs)])
                     self.add([-self.X(18, j, u, rhs), self.X(1, row, i, u)])
+        self.add_primary_lambda6_prunes()
         self.progress.log(
             f"CNF primary prunes complete: clauses_added={len(self.clauses) - before}, "
             f"total_clauses={len(self.clauses)}"
@@ -409,7 +495,8 @@ class CNFBuilder:
         build_start = time.time()
         self.progress.log(
             f"CNF build started: config={self.cfg.name}, p={self.p}, q={self.q}, "
-            f"strong_primary_prunes={self.strong_primary_prunes}"
+            f"strong_primary_prunes={self.strong_primary_prunes}, "
+            f"lambda6_row_prunes={self.lambda6_row_prunes}"
         )
         self.apply_seed()
         before = len(self.clauses)
@@ -693,7 +780,12 @@ def run_affine_o11_projection_sweep(cfg: Config, args: argparse.Namespace) -> in
     if not cfg.seed_primary or cfg.q != 7:
         raise SystemExit("the affine O11 projection sweep is only implemented for the primary q=7 seed")
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(cfg, strong_primary_prunes=True, progress=progress)
+    builder = CNFBuilder(
+        cfg,
+        strong_primary_prunes=True,
+        lambda6_row_prunes=not args.no_lambda6_row_prunes,
+        progress=progress,
+    )
     clauses, _ = builder.build()
     S = solver_class(args.solver)
     print(f"CNF: vars={builder.vpool.top} clauses={len(clauses)}")
@@ -851,7 +943,12 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
         raise SystemExit("--branch-index must satisfy 0 <= index < mod")
 
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(cfg, strong_primary_prunes=not args.no_strong_prunes, progress=progress)
+    builder = CNFBuilder(
+        cfg,
+        strong_primary_prunes=not args.no_strong_prunes,
+        lambda6_row_prunes=not args.no_lambda6_row_prunes,
+        progress=progress,
+    )
     clauses, _ = builder.build()
     base = base_assumptions(cfg, builder, args)
     groups = branch_choice_groups(cfg, builder, args)
@@ -995,7 +1092,12 @@ def write_dimacs(path: Path, clauses: Sequence[Sequence[int]], vars_top: int,
 
 def run_dimacs_export(cfg: Config, args: argparse.Namespace) -> int:
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(cfg, strong_primary_prunes=not args.no_strong_prunes, progress=progress)
+    builder = CNFBuilder(
+        cfg,
+        strong_primary_prunes=not args.no_strong_prunes,
+        lambda6_row_prunes=not args.no_lambda6_row_prunes,
+        progress=progress,
+    )
     clauses, _ = builder.build()
     assumptions = base_assumptions(cfg, builder, args)
     out = Path(args.cnf_out or "colored_magma.cnf")
@@ -1015,7 +1117,12 @@ def run_dimacs_export(cfg: Config, args: argparse.Namespace) -> int:
 
 def run_full_sat(cfg: Config, args: argparse.Namespace) -> int:
     progress = progress_logger_from_args(args)
-    builder = CNFBuilder(cfg, strong_primary_prunes=not args.no_strong_prunes, progress=progress)
+    builder = CNFBuilder(
+        cfg,
+        strong_primary_prunes=not args.no_strong_prunes,
+        lambda6_row_prunes=not args.no_lambda6_row_prunes,
+        progress=progress,
+    )
     clauses, _ = builder.build()
     assumptions = base_assumptions(cfg, builder, args)
 
@@ -1089,7 +1196,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
                         help="seconds between long-running solve progress reports; use 0 to print every chunk")
     parser.add_argument("--progress-conflicts", type=int, default=50000,
                         help="conflict chunk size for solve progress when --conflicts is not set; use 0 for blocking solve")
-    parser.add_argument("--no-strong-prunes", action="store_true", help="disable derived primary lambda=1/lambda=12 pruning")
+    parser.add_argument("--no-strong-prunes", action="store_true", help="disable derived primary lambda=1/lambda=12/lambda=6 pruning")
+    parser.add_argument("--no-lambda6-row-prunes", action="store_true",
+                        help="keep the direct lambda=6 replacement but disable extra O_11/O_6 row-repeat nogoods")
     parser.add_argument("--symbreak-o11-00", type=int, choices=[0, 1], default=None,
                         help="primary only: branch on O_11(0,0)=0 or normalized nonzero value 1")
     parser.add_argument("--assume-cell", action="append", default=[], metavar="L:I:J:V",

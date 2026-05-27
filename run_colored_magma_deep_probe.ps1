@@ -40,7 +40,7 @@ Write-Host ""
     --branch-mod $BranchMod `
     --branch-index $BranchIndex `
     --conflicts $ConflictBudget `
-    --progress-every 60 `
+    --progress-every 0 `
     --progress-conflicts 50000 `
     --log $jsonLog `
     --resume `
