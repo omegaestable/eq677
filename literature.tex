@@ -13,67 +13,44 @@
 \setlist{leftmargin=1.5em,itemsep=4pt,topsep=4pt}
 
 \newcommand{\op}{\diamond}
-\newcommand{\fin}{\mathrm{fin}}
-\newcommand{\E}[1]{\mathrm{E#1}}
 
 \theoremstyle{definition}
 \newtheorem{problem}{Problem}
-\newtheorem*{hint}{Hint}
 \newtheorem*{goal}{Final goal}
 
-\theoremstyle{remark}
-\newtheorem*{warning}{Warning}
-
-\title{A Finite Magma Challenge for Equation 677}
+\title{Finite Magma Exercise}
 \author{}
 \date{May 2026}
 
 \begin{document}
 \maketitle
 
-\begin{problem}[Main question]
-Let $M$ be a finite nonempty set with a binary operation $\op$.  Suppose that, for all
-$x,y\in M$,
+\begin{problem}
+Let $M$ be a finite nonempty set with a binary operation $\op$ satisfying
 \[
-\E{677}:\qquad
-x=y\op\bigl(x\op((y\op x)\op y)\bigr).
+x=y\op\bigl(x\op((y\op x)\op y)\bigr)
+\qquad (x,y\in M). \tag{H}
 \]
-Prove that, for every $x\in M$,
+Prove
 \[
-\E{255}:\qquad
-x=((x\op x)\op x)\op x.
+x=((x\op x)\op x)\op x
+\qquad (x\in M). \tag{G}
 \]
 \end{problem}
-
-The following hints are meant to be used in order.  They are deliberately phrased as a
-proof path, with the target of proving the identity $\E{255}$ from $\E{677}$ and
-finiteness.
-
-\begin{warning}
-Do not assume associativity, commutativity, an identity element, inverses, right
-cancellation, or quasigroup structure.  The only cancellation allowed in the hints below
-is left cancellation after it has been proved.
-\end{warning}
 
 \section*{Hints}
 
 \begin{enumerate}[label=\textbf{\arabic*.}]
-\item \textbf{First obtain left division.}
-Fix $a\in M$ and let $L_a(t)=a\op t$.  From $\E{677}$, with $y=a$, show that for every
-$b\in M$,
+\item For $a\in M$, set $L_a(t)=a\op t$.  From (H),
 \[
 b=a\op\bigl(b\op((a\op b)\op a)\bigr).
 \]
-Thus $L_a$ is surjective, hence bijective because $M$ is finite.  Define
-$a\backslash b$ to be the unique element $u$ with $a\op u=b$.  Then
+Hence $L_a$ is bijective.  Write $a\backslash b$ for the unique $u$ with $a\op u=b$;
 \[
-a\backslash b=b\op((a\op b)\op a).
+a\backslash b=b\op((a\op b)\op a). \tag{D}
 \]
-All later cancellations should be read as cancellations by one of these bijective left
-translations.
 
-\item \textbf{Derive the two basic identities.}
-Show that, for all $y,z\in M$,
+\item For $y,z\in M$,
 \[
 z=(y\op z)\op\bigl((y\op(y\op z))\op y\bigr), \tag{T}
 \]
@@ -82,11 +59,9 @@ and
 (y\op(y\op z))\op y
 =z\op\bigl(((y\op z)\op z)\op(y\op z)\bigr). \tag{K}
 \]
-For (T), substitute $y\op z$ for $x$ in $\E{677}$ and cancel $y$.  For (K), compare
-(T) with $\E{677}$ after replacing $y$ by $y\op z$, then cancel $y\op z$.
+Use (H) with $x=y\op z$, then compare with (H) after $y\mapsto y\op z$.
 
-\item \textbf{Reduce the problem at a fixed point.}
-Fix $x\in M$ and put
+\item Fix $x\in M$ and put
 \[
 a=x\op x,
 \qquad
@@ -94,16 +69,11 @@ q=a\op x=((x\op x)\op x),
 \qquad
 p=x\backslash x.
 \]
-The desired identity at $x$ is simply
+The goal at $x$ is
 \[
 q\op x=x. \tag{1}
 \]
-Prove the useful strengthening: if $u\op x=x$, then $u=q$.  Indeed, (T) gives
-$x=x\op(x\op u)$, while $\E{677}$ at $(x,y)=(x,x)$ gives $x=x\op(x\op q)$; two left
-cancellations give $u=q$.
-
-Thus $\E{255}$ at $x$ is equivalent to the existence of a right fixed point over $x$.
-It is also equivalent to each of
+If $u\op x=x$, then $u=q$.  Also (1) is equivalent to each of
 \[
 q\backslash x=x,
 \qquad
@@ -111,11 +81,8 @@ q\backslash x=x,
 \qquad
 (q\op x)\op q=p. \tag{2}
 \]
-Use (T) with $(y,z)=(x\op x,x)$, and the formula for $q\backslash x$, to verify these
-equivalences.
 
-\item \textbf{Introduce the fixed maps.}
-For the same fixed $x$, define
+\item Define
 \[
 H(t)=(x\op t)\op x,
 \qquad
@@ -127,40 +94,33 @@ x\backslash t=t\op H(t),
 \qquad
 F(L_x(t))=L_x(H(t)). \tag{3}
 \]
-Hence $F$ and $H$ are conjugate self-maps of $M$.  Show that (1) is equivalent to
-either of these maps having a fixed point.  If a fixed point exists, it is unique.
+Thus $F$ and $H$ are conjugate.  A fixed point of either map is equivalent to (1), and
+is unique.
 
-\item \textbf{Study the orbit of $x$ under $L_x$.}
-Let
+\item Let
 \[
 c_0=x,
 \qquad
 c_{k+1}=x\op c_k.
 \]
-Since $L_x$ is a permutation of the finite set $M$, the sequence is periodic.  Let $d$ be
-the least positive period of the orbit of $x$, and read all subscripts modulo $d$.  Put
+Let $d$ be the least period of this $L_x$-orbit, read subscripts modulo $d$, and set
 \[
 d_k=c_k\op x.
 \]
-Using $\E{677}$ with parameter $x$, prove the recurrence
 \[
 c_{k-1}=c_k\op d_{k+1}. \tag{4}
 \]
-Then show
 \[
 p=c_{d-1},
 \qquad
 q=d_1=c_{d-2},
 \qquad
-p\op c_1=q. \tag{5}
+p\op c_1=q,
+\qquad
+d_j=x\Rightarrow j\equiv d-2\pmod d. \tag{5}
 \]
-A further useful fact is this: if $d_j=x$, then $j\equiv d-2\pmod d$.
 
-\item \textbf{Eliminate the smallest periods.}
-If $d=1$, then $x\op x=x$, so $q=x$ and (1) follows.  The case $d=2$ contradicts the
-last statement in Hint 5.
-
-For $d=3$, write
+\item If $d=1$, then (1).  If $d=2$, contradiction.  If $d=3$, write
 \[
 c_0=x,
 \qquad
@@ -168,7 +128,6 @@ c_1=a=q,
 \qquad
 c_2=p.
 \]
-Use (4) and (K) to prove successively
 \[
 x=a\op(p\op x),
 \qquad
@@ -182,28 +141,20 @@ then
 \qquad\text{and}\qquad
 (a\op a)\op a=x\op(a\op a).
 \]
-Cancel on the left by $x$ at the final step to get $a\op a=a$, contradicting the
-displayed identity $(a\op a)\op a=p$.  Thus any unresolved point has orbit period
-$d\ge4$.
+Then $a\op a=a$, hence $p=a$, contradiction.  Thus any unresolved $x$ has $d\ge4$.
 
-\item \textbf{Use finiteness on the right.}
-Assume, for the sake of contradiction, that $q\op x\ne x$.  By Hint 3, no element
-$u\in M$ satisfies $u\op x=x$.  Hence $x$ is missing from the image of the map
-$R_x(t)=t\op x$.  Since $M$ is finite, $R_x$ has a nontrivial fiber: there exist
-$y\ne z$ and $e\in M$ such that
+\item Assume $q\op x\ne x$.  Then $u\op x\ne x$ for all $u\in M$.  Since $M$ is finite,
+there are $y\ne z$ and $e\in M$ with
 \[
 y\op x=z\op x=e. \tag{6}
 \]
-Apply (T) twice, once with $(y,z)=(y,x)$ and once with $(y,z)=(z,x)$.  After left
-cancelling $e$, obtain
+From (T),
 \[
 (y\op e)\op y=(z\op e)\op z=e\backslash x. \tag{7}
 \]
-Moreover, if $y\op e=z\op e$, then a further left cancellation gives $y=z$.  Therefore
-the map $t\mapsto t\op e$ is injective on every such collision fiber.
+Moreover $y\op e=z\op e\Rightarrow y=z$.
 
-\item \textbf{Convert a collision into the fixed point.}
-The clean finishing lemma would be:
+\item Prove the collision lemma
 \[
 \boxed{
 y\op x=z\op x=e,\quad y\ne z
@@ -211,44 +162,31 @@ y\op x=z\op x=e,\quad y\ne z
 e\op x=x.}
 \tag{C}
 \]
-If (C) is proved, then the problem is solved.  Indeed, (6) gives $e\op x=x$, and Hint 3
-then forces $e=q$, so $q\op x=x$.
-
-Here is a route toward (C).  Define
+Then (1) follows.  Define
 \[
 \Phi(u,v)=\bigl(u\op v,
 (u\op(u\op v))\op u\bigr).
 \]
-If $\Phi(u,v)=(r,s)$, prove from (T) that
 \[
+\Phi(u,v)=(r,s)\Rightarrow
 r\op s=v. \tag{8}
 \]
-Thus a forward $\Phi$-orbit may be written as
 \[
 \Phi^n(u,v)=(\alpha_n,\alpha_{n+2}),
 \qquad
 \alpha_n\op\alpha_{n+2}=\alpha_{n+1}. \tag{9}
 \]
-
-For a collision (6), equation (7) gives a common element
 \[
 t=(y\op e)\op y=(z\op e)\op z,
 \qquad
 e\op t=x,
-\]
-and hence
-\[
+\qquad
 \Phi(y,x)=\Phi(z,x)=(e,t). \tag{10}
 \]
-It remains to prove $t=x$.  Since $M$ is finite, the forward $\Phi$-orbit of $(e,t)$
-eventually repeats.  The intended last move is to pull the first repeated pair backward
-through the recurrence (9) until it reaches the two distinct predecessors $(y,x)$ and
-$(z,x)$.  If this pullback can be justified using only left cancellation, then $t=x$;
-consequently $e\op x=x$, and the main identity follows.
+Use the first repeated pair in the finite forward $\Phi$-orbit of $(e,t)$ and pull it
+back through (9).  It suffices to force $t=x$.
 
-\item \textbf{Optional orbit test for period four.}
-As a smaller arena for the preceding ideas, suppose the $L_x$-orbit of $x$ has period
-$4$.  Write
+\item Optional: if $d=4$, write
 \[
 c_0=x,
 \qquad
@@ -262,7 +200,6 @@ r=q\op x,
 \qquad
 s=p\op x.
 \]
-Use the recurrence (4), together with (T) and (K), to prove
 \[
 x\op a=q,
 \qquad
@@ -288,15 +225,11 @@ s=(q\op q)\op q=a\op(q\op q),
 \qquad
 s\notin\{x,a,q,p\}. \tag{12}
 \]
-These identities make period four a good test case for the collision lemma (C): the
-right tail is forced to leave the principal orbit unless (1) already holds.
 \end{enumerate}
 
 \begin{goal}
-Prove the boxed collision lemma (C), or prove any one of the equivalent identities in
-(1)--(2), using the finite repetitions supplied above.  Once $q\op x=x$ is obtained for
-the fixed but arbitrary element $x$, the identity $\E{255}$ follows for all elements of
-$M$.
+For arbitrary $x$, prove (C), (1), or any identity in (2).  Then (G) holds for all
+$x\in M$.
 \end{goal}
 
 \end{document}
