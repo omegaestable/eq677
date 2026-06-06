@@ -62,13 +62,20 @@ Use the repository virtualenv:
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode affine-o11-projection-sweep --solver cadical --out ""
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode deep --solver cadical --primary-o11-symmetry --branch-o11-column 0 --branch-mod 8 --branch-index 0 --log run_logs\colored_magma\primary_o11_col0_shard0.jsonl --out run_logs\colored_magma\primary_solution.json
 & .\.venv\Scripts\python.exe explore_colored_magma.py --config primary --mode dimacs --symbreak-o11-00 0 --cnf-out run_logs\colored_magma\primary_o11_00.cnf
+& .\.venv\Scripts\python.exe explore_colored_magma.py --mode log-summary --log-in run_logs\colored_magma
+& .\.venv\Scripts\python.exe explore_colored_magma.py --mode log-compact --log-in run_logs\colored_magma --log-out run_logs\colored_magma\compact.jsonl
 ```
 
 The colored-slope solver is the current explicit-construction branch for the primary
 candidate described in [finite_counterexample_path.tex](finite_counterexample_path.tex).
 Use `--mode deep` with `--branch-mod/--branch-index` for long sharded runs; omit
-`--conflicts` or set it to `0` for an uninterrupted branch.  `--primary-o11-symmetry`
-uses the homogeneous color-scalar normalization `O_11(0,0)=0` or `1`.
+`--conflicts` or set it to `0` for an uninterrupted branch.  Deep runs now use stable
+default JSONL log names, fsync each branch record, and write durable solver heartbeats
+every 10 minutes by default.  Use `--stop-file path\to\run.stop` to request a graceful
+stop after the current solver chunk, and `--touch-stop-file-on-sat` on sibling shards so
+one verified solution winds the others down.  `--primary-o11-symmetry` uses the
+homogeneous color-scalar normalization `O_11(0,0)=0` or `1`; in the zero column branch it
+also uses the residual scalar symmetry to normalize `O_11(1,0)=1`.
 
 Authenticated API writes are explicit opt-in subcommands on
 `scripts/e677_db_analyze.py` and require `EQ677_API_TOKEN`; ordinary manifest/table

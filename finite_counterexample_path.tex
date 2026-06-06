@@ -517,7 +517,9 @@ has a homogeneous color-scalar symmetry, so the branch $O_{11}(0,0)=0$ plus the 
 nonzero branch $O_{11}(0,0)=1$ covers the same quotient as all nonzero values.  For
 machine exhaustion, split an entire column of $O_{11}$ into permutations and shard it
 across workers; this is a partition of the remaining search, not an extra mathematical
-assumption.
+assumption.  In the column-$0$ split one can take the scalar quotient a little further:
+the nonzero case is represented by $O_{11}(0,0)=1$, while in the zero case the residual
+$\mathbb F_7^\times$-action can normalize $O_{11}(1,0)=1$.
 
 \item \textbf{Use minimality as pressure.}
 A smallest counterexample cannot be commutative, right-cancellative, a quasigroup, or a

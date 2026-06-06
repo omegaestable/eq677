@@ -35,18 +35,24 @@ The --mode maps and --mode stats paths do not require PySAT.
 from __future__ import annotations
 
 import argparse
+import glob
+import hashlib
 import itertools
 import json
+import os
+import signal
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
 INF_NAME = "inf"
 TRUE_LIT: Optional[int] = None
 FALSE_LIT = 0
 InternalLit = Optional[int]  # None means satisfied literal; 0 means false literal.
+INTERRUPTED = "interrupted"
+TERMINAL_BRANCH_STATUSES = {"sat", "unsat", "unsat-prop", "bad-model", "verified-sat"}
 
 
 @dataclass(frozen=True)
@@ -69,8 +75,63 @@ class ProgressLogger:
             print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
+@dataclass
+class JsonlRunLog:
+    path: Path
+    run_id: str
+    fsync: bool = True
+
+    def append(self, record: Dict[str, object]) -> None:
+        out = dict(record)
+        out.setdefault("event_time", timestamp_text())
+        out.setdefault("run_id", self.run_id)
+        append_jsonl(self.path, out, fsync=self.fsync)
+
+
+@dataclass
+class StopController:
+    stop_file: Optional[Path] = None
+    requested: bool = False
+    signum: Optional[int] = None
+
+    def request(self, signum: int, _frame: object) -> None:
+        self.requested = True
+        self.signum = signum
+
+    def should_stop(self) -> bool:
+        return self.requested or (self.stop_file is not None and self.stop_file.exists())
+
+    def reason(self) -> str:
+        if self.requested:
+            return f"signal {self.signum}"
+        if self.stop_file is not None and self.stop_file.exists():
+            return f"stop file {self.stop_file}"
+        return "stop requested"
+
+
 def progress_logger_from_args(args: argparse.Namespace) -> ProgressLogger:
     return ProgressLogger(enabled=not args.quiet)
+
+
+def timestamp_text() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def install_stop_handlers(controller: StopController) -> None:
+    for name in ("SIGINT", "SIGTERM"):
+        signum = getattr(signal, name, None)
+        if signum is None:
+            continue
+        try:
+            signal.signal(signum, controller.request)
+        except (OSError, ValueError):
+            pass
+
+
+def write_stop_file(path: Path, reason: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"event_time": timestamp_text(), "reason": reason}
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def format_seconds(seconds: float) -> str:
@@ -292,6 +353,7 @@ class CNFBuilder:
         strong_primary_prunes: bool = True,
         lambda6_row_prunes: bool = True,
         replace_derived_identities: bool = True,
+        transformed_identity_prunes: bool = False,
         progress: Optional[ProgressLogger] = None,
     ) -> None:
         self.cfg = cfg
@@ -305,6 +367,7 @@ class CNFBuilder:
         self.strong_primary_prunes = strong_primary_prunes
         self.lambda6_row_prunes = lambda6_row_prunes
         self.replace_derived_identities = replace_derived_identities
+        self.transformed_identity_prunes = transformed_identity_prunes
         self.progress = progress or ProgressLogger(enabled=False)
         self.trivial_clauses = 0
         self.false_literals_removed = 0
@@ -568,6 +631,100 @@ class CNFBuilder:
                 f"total_clauses={len(self.clauses)}"
             )
 
+    def base_product(self, left: int, right: int) -> int:
+        return (self.cfg.A * left + self.cfg.B * right) % self.p
+
+    def representative_pair(self, lam: int) -> Tuple[int, int]:
+        if lam == self.p:
+            return 1, 0
+        return lam, 1
+
+    def slope_label_for_pair(self, left: int, right: int) -> Optional[int]:
+        left %= self.p
+        right %= self.p
+        if left == 0 and right == 0:
+            return None
+        if right == 0:
+            return self.p
+        return (left * inv_mod(right, self.p)) % self.p
+
+    def op_output_lit(self, slope: Optional[int], left_color: int, right_color: int,
+                      value: int, positive: bool) -> InternalLit:
+        if slope is None:
+            truth = bullet(self.q, left_color, right_color) == value % self.q
+            if positive:
+                return TRUE_LIT if truth else FALSE_LIT
+            return FALSE_LIT if truth else TRUE_LIT
+        return self.cell_lit(slope, left_color, right_color, value, positive=positive)
+
+    def transformed_identity_slopes(self, lam: int) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+        """Slope sequence for z=(y*z)*((y*(y*z))*y)."""
+        y, z = self.representative_pair(lam)
+        yz = self.base_product(y, z)
+        y_yz = self.base_product(y, yz)
+        y_yz_y = self.base_product(y_yz, y)
+        out = self.base_product(yz, y_yz_y)
+        if out != z % self.p:
+            self.contradiction = (
+                f"base transformed identity fails for lambda={label_name(lam, self.p)}: "
+                f"out={out}, expected={z % self.p}"
+            )
+            self.add_clause([], reason=self.contradiction)
+        return (
+            self.slope_label_for_pair(y, yz),
+            self.slope_label_for_pair(y_yz, y),
+            self.slope_label_for_pair(yz, y_yz_y),
+        )
+
+    def add_transformed_identity_constraints(self) -> None:
+        if not self.transformed_identity_prunes:
+            self.progress.log("CNF transformed identity prunes: disabled")
+            return
+        q = self.q
+        raw = q ** 5
+        self.progress.log("CNF transformed identity prunes: adding z=(y*z)*((y*(y*z))*y)")
+        for label_index, lam in enumerate(self.labels, start=1):
+            beta, gamma, delta = self.transformed_identity_slopes(lam)
+            before = len(self.clauses)
+            triv_before = self.trivial_clauses
+            false_before = self.false_literals_removed
+            self.progress.log(
+                f"CNF transformed identity: lambda={label_name(lam, self.p)} "
+                f"({label_index}/{len(self.labels)}), "
+                f"beta={label_name(beta, self.p) if beta is not None else 'zero'}, "
+                f"gamma={label_name(gamma, self.p) if gamma is not None else 'zero'}, "
+                f"delta={label_name(delta, self.p) if delta is not None else 'zero'}, raw={raw}"
+            )
+            for i in range(q):
+                for j in range(q):
+                    for t in range(q):
+                        lit1 = self.op_output_lit(lam, i, j, t, positive=False)
+                        if lit1 is TRUE_LIT:
+                            self.trivial_clauses += q * q
+                            continue
+                        for u in range(q):
+                            lit2 = self.op_output_lit(beta, i, t, u, positive=False)
+                            if lit2 is TRUE_LIT:
+                                self.trivial_clauses += q
+                                continue
+                            for v in range(q):
+                                self.add_clause(
+                                    [
+                                        lit1,
+                                        lit2,
+                                        self.op_output_lit(gamma, u, i, v, positive=False),
+                                        self.op_output_lit(delta, t, v, j, positive=True),
+                                    ],
+                                    reason=f"transformed identity lambda={label_name(lam,self.p)}",
+                                )
+            self.progress.log(
+                f"CNF transformed identity: lambda={label_name(lam, self.p)} complete, "
+                f"clauses_added={len(self.clauses) - before}, "
+                f"tautologies_skipped={self.trivial_clauses - triv_before}, "
+                f"false_lits_removed={self.false_literals_removed - false_before}, "
+                f"total_clauses={len(self.clauses)}"
+            )
+
     def inverse_c3_value(self, row: int, output: int) -> int:
         if row == 0:
             return (5 * output) % self.q
@@ -702,7 +859,8 @@ class CNFBuilder:
             f"CNF build started: config={self.cfg.name}, p={self.p}, q={self.q}, "
             f"strong_primary_prunes={self.strong_primary_prunes}, "
             f"lambda6_row_prunes={self.lambda6_row_prunes}, "
-            f"replace_derived_identities={self.replace_derived_identities}"
+            f"replace_derived_identities={self.replace_derived_identities}, "
+            f"transformed_identity_prunes={self.transformed_identity_prunes}"
         )
         self.apply_seed()
         before = len(self.clauses)
@@ -721,6 +879,7 @@ class CNFBuilder:
             self.add_primary_prunes()
         else:
             self.progress.log("CNF primary prunes: disabled by --no-strong-prunes")
+        self.add_transformed_identity_constraints()
         self.progress.log(
             f"CNF build finished in {format_seconds(time.time() - build_start)}: "
             f"vars={self.vpool.top}, clauses={len(self.clauses)}, "
@@ -788,6 +947,8 @@ def solve_with_progress(
     args: argparse.Namespace,
     progress: ProgressLogger,
     label: str,
+    heartbeat: Optional[Callable[[Dict[str, object]], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ):
     assumption_list = [lit for lit in assumptions if lit]
     hard_conflict_budget = args.conflicts
@@ -816,6 +977,7 @@ def solve_with_progress(
         )
         start = time.time()
         last_report = start
+        last_heartbeat = start
         chunks = 0
         while True:
             solver.conf_budget(chunk_conflicts)
@@ -829,12 +991,36 @@ def solve_with_progress(
                 )
                 return result
 
+            if should_stop is not None and should_stop():
+                progress.log(
+                    f"{label}: stop requested after {chunks} chunk(s), "
+                    f"elapsed={format_seconds(now - start)}"
+                )
+                if heartbeat is not None:
+                    heartbeat({
+                        "event": "solver-stop",
+                        "status": INTERRUPTED,
+                        "chunks": chunks,
+                        "elapsed_seconds": now - start,
+                        "stats": solver_stats(solver),
+                    })
+                return INTERRUPTED
+
             if args.progress_every <= 0 or chunks == 1 or now - last_report >= args.progress_every:
                 progress.log(
                     f"{label}: still searching after {chunks} chunk(s), "
                     f"elapsed={format_seconds(now - start)}, stats={stats_summary(solver_stats(solver))}"
                 )
                 last_report = now
+            if heartbeat is not None and args.heartbeat_every > 0 and now - last_heartbeat >= args.heartbeat_every:
+                heartbeat({
+                    "event": "solver-heartbeat",
+                    "status": "running",
+                    "chunks": chunks,
+                    "elapsed_seconds": now - start,
+                    "stats": solver_stats(solver),
+                })
+                last_heartbeat = now
 
     progress.log(
         f"{label}: blocking solve starts, assumptions={len(assumption_list)}; "
@@ -1018,6 +1204,7 @@ def new_builder(cfg: Config, args: argparse.Namespace, progress: ProgressLogger)
         strong_primary_prunes=not args.no_strong_prunes,
         lambda6_row_prunes=not args.no_lambda6_row_prunes,
         replace_derived_identities=not args.no_replace_derived_identities,
+        transformed_identity_prunes=args.transformed_identity_prunes,
         progress=progress,
     )
 
@@ -1070,6 +1257,26 @@ def run_affine_o11_projection_sweep(cfg: Config, args: argparse.Namespace) -> in
 
 
 BranchChoice = Tuple[str, List[int], Dict[str, object]]
+
+
+def keep_primary_o11_column0_representative(cfg: Config, args: argparse.Namespace, perm: Sequence[int]) -> bool:
+    """Canonical representatives for the primary color-scalar symmetry.
+
+    Scaling every color by s in F_7^* preserves the primary fixed operations.  The
+    nonzero O_11(0,0) orbit is represented by value 1.  If O_11(0,0)=0, the stabilizer is
+    still all of F_7^*, so a column-0 split can also normalize O_11(1,0)=1.
+    """
+    if not cfg.seed_primary or cfg.q != 7:
+        return True
+    if args.symbreak_o11_00 is not None:
+        if perm[0] != args.symbreak_o11_00:
+            return False
+        return perm[1] == 1 if perm[0] == 0 else True
+    if args.primary_o11_symmetry:
+        if perm[0] == 0:
+            return perm[1] == 1
+        return perm[0] == 1
+    return True
 
 
 def cell_choice(builder: CNFBuilder, cfg: Config, a: int, i: int, j: int, value: int) -> Optional[BranchChoice]:
@@ -1185,10 +1392,7 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
             raise SystemExit(str(exc)) from exc
         group = []
         for perm in itertools.permutations(range(cfg.q)):
-            if cfg.seed_primary and a == 11 and j == 0 and args.symbreak_o11_00 is not None:
-                if perm[0] != args.symbreak_o11_00:
-                    continue
-            if args.primary_o11_symmetry and cfg.seed_primary and a == 11 and j == 0 and perm[0] not in (0, 1):
+            if cfg.seed_primary and a == 11 and j == 0 and not keep_primary_o11_column0_representative(cfg, args, perm):
                 continue
             choice = column_choice(builder, cfg, a, j, perm)
             if choice is not None:
@@ -1205,9 +1409,7 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
             raise SystemExit(f"O11 column index {j} is outside 0..{cfg.q - 1}")
         group = []
         for perm in itertools.permutations(range(cfg.q)):
-            if j == 0 and args.symbreak_o11_00 is not None and perm[0] != args.symbreak_o11_00:
-                continue
-            if args.primary_o11_symmetry and j == 0 and perm[0] not in (0, 1):
+            if j == 0 and not keep_primary_o11_column0_representative(cfg, args, perm):
                 continue
             choice = column_choice(builder, cfg, 11, j, perm)
             if choice is not None:
@@ -1256,10 +1458,65 @@ def load_completed_branches(path: Path) -> set[str]:
     return completed
 
 
+def safe_name_part(text: object) -> str:
+    raw = str(text)
+    chars = [ch if ch.isalnum() or ch in "._-" else "_" for ch in raw]
+    cleaned = "_".join(part for part in "".join(chars).split("_") if part)
+    return cleaned or "none"
+
+
+def deep_log_stem(cfg: Config, args: argparse.Namespace) -> str:
+    branch_specs: List[str] = []
+    for label, specs in (
+        ("cell", args.branch_cell or []),
+        ("row", args.branch_row or []),
+        ("column", args.branch_column or []),
+        ("o11column", args.branch_o11_column or []),
+    ):
+        for spec in specs:
+            branch_specs.append(f"{label}-{spec}")
+
+    has_explicit_branch = bool(branch_specs)
+    if (
+        not has_explicit_branch
+        and args.symbreak_o11_00 is not None
+        and args.restartable_symbreak
+        and cfg.seed_primary
+        and cfg.q == 7
+    ):
+        branch_specs.append("o11column-0")
+    elif not has_explicit_branch and args.symbreak_o11_00 is None and args.default_branch != "none":
+        branch_specs.append(f"default-{args.default_branch}")
+    if not branch_specs:
+        branch_specs.append("unbranched")
+
+    assumption_specs = [f"assume-{spec}" for spec in (args.assume_cell or [])]
+    option_bits = [
+        cfg.name,
+        args.solver,
+        f"shard{args.branch_index}of{args.branch_mod}",
+        f"sym{args.symbreak_o11_00}" if args.symbreak_o11_00 is not None else "symnone",
+    ]
+    if args.primary_o11_symmetry:
+        option_bits.append("primary-o11-symmetry")
+    if args.no_strong_prunes:
+        option_bits.append("no-strong-prunes")
+    if args.no_lambda6_row_prunes:
+        option_bits.append("no-lambda6-row-prunes")
+    if args.no_replace_derived_identities:
+        option_bits.append("no-replace-derived-identities")
+    if args.transformed_identity_prunes:
+        option_bits.append("transformed-identity")
+    raw = "__".join(option_bits + assumption_specs + branch_specs)
+    safe = safe_name_part(raw)
+    if len(safe) > 180:
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        safe = f"{safe[:160]}_{digest}"
+    return safe
+
+
 def default_deep_log_path(cfg: Config, args: argparse.Namespace) -> Path:
-    stamp = time.strftime("%Y%m%d_%H%M%S")
-    name = f"{cfg.name}_{args.solver}_{stamp}.jsonl"
-    return Path("run_logs") / "colored_magma_tuned" / name
+    return Path("run_logs") / "colored_magma" / f"{deep_log_stem(cfg, args)}.jsonl"
 
 
 def solution_path_for_branch(path: Optional[str], branch_no: int, total: int) -> Optional[str]:
@@ -1271,10 +1528,13 @@ def solution_path_for_branch(path: Optional[str], branch_no: int, total: int) ->
     return str(p.with_name(f"{p.stem}.branch{branch_no}{p.suffix}"))
 
 
-def append_jsonl(path: Path, record: Dict[str, object]) -> None:
+def append_jsonl(path: Path, record: Dict[str, object], fsync: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, sort_keys=True) + "\n")
+        f.flush()
+        if fsync:
+            os.fsync(f.fileno())
 
 
 def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
@@ -1291,6 +1551,12 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
     total = branch_count(groups)
     selected_total = selected_branch_count(total, args.branch_mod, args.branch_index)
     log_path = Path(args.log) if args.log else default_deep_log_path(cfg, args)
+    if args.touch_stop_file_on_sat and not args.stop_file:
+        raise SystemExit("--touch-stop-file-on-sat requires --stop-file")
+    run_id = f"{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}"
+    run_log = JsonlRunLog(log_path, run_id=run_id, fsync=args.fsync_log)
+    stop_controller = StopController(Path(args.stop_file) if args.stop_file else None)
+    install_stop_handlers(stop_controller)
     completed = load_completed_branches(log_path) if args.resume else set()
 
     print(f"Config: {cfg}")
@@ -1305,6 +1571,9 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
     if args.max_branches:
         print(f"Max local solves this run: {args.max_branches}")
     print(f"Log: {log_path}")
+    if stop_controller.stop_file is not None:
+        print(f"Stop file: {stop_controller.stop_file}")
+    print(f"Heartbeat: every {format_seconds(args.heartbeat_every)}" if args.heartbeat_every else "Heartbeat: disabled")
     if args.resume:
         print(f"Resume: loaded {len(completed)} completed branch record(s)")
     if args.primary_o11_symmetry and cfg.seed_primary:
@@ -1326,6 +1595,25 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
                 break
         return 0
 
+    run_log.append({
+        "event": "run-start",
+        "status": "running",
+        "config": cfg.__dict__,
+        "solver": args.solver,
+        "vars": builder.vpool.top,
+        "clauses": len(clauses),
+        "base_assumptions": len(base),
+        "branch_groups": [len(group) for group in groups] or [1],
+        "total_branches": total,
+        "branch_mod": args.branch_mod,
+        "branch_index": args.branch_index,
+        "selected_branches": selected_total,
+        "resume": bool(args.resume),
+        "completed_loaded": len(completed),
+        "heartbeat_every": args.heartbeat_every,
+        "stop_file": str(stop_controller.stop_file) if stop_controller.stop_file is not None else None,
+    })
+
     unknown = 0
     solved = 0
     skipped = 0
@@ -1334,118 +1622,257 @@ def run_deep_sat(cfg: Config, args: argparse.Namespace) -> int:
     run_start = time.time()
     local_seen = 0
     progress.log(f"creating solver {args.solver} with {len(clauses)} clauses")
-    with S(bootstrap_with=clauses) as solver:
-        for branch_no, (description, branch_assumptions, details) in enumerate(combined_branch_choices(groups), start=1):
-            if (branch_no - 1) % args.branch_mod != args.branch_index:
-                continue
-            local_seen += 1
-            if description in completed:
-                skipped += 1
-                if skipped <= 5 or skipped % 100 == 0:
-                    elapsed = time.time() - run_start
-                    progress.log(
-                        f"branch {branch_no}/{total} local={local_seen}/{selected_total}: skipped from resume; "
-                        f"processed={solved + unknown + skipped + prop_unsat}/{selected_total}, "
-                        f"elapsed={format_seconds(elapsed)} {eta_text(solved + unknown + skipped + prop_unsat, selected_total, elapsed)}"
-                    )
-                continue
-            if args.max_branches and solved + unknown + prop_unsat >= args.max_branches:
-                break
-
-            assumptions = base + branch_assumptions
-            progress.log(
-                f"branch {branch_no}/{total} local={local_seen}/{selected_total} starts: "
-                f"{description}; assumptions={len(assumptions)}"
-            )
-            start = time.time()
-            if args.propagate_branches:
-                prop = solver_propagate(solver, assumptions)
-                if prop is not None:
-                    ok, props = prop
-                    if not ok:
-                        elapsed = time.time() - start
-                        prop_unsat += 1
-                        print(
-                            f"branch {branch_no}/{total}: {description} -> unsat-prop "
-                            f"elapsed={elapsed:.2f}s propagated={len(props)} stats={solver_stats(solver)}"
-                        )
-                        append_jsonl(log_path, {
-                            "branch": description,
-                            "branch_no": branch_no,
-                            "total_branches": total,
-                            "details": details,
-                            "status": "unsat-prop",
-                            "elapsed_seconds": elapsed,
-                            "solver": args.solver,
-                            "stats": solver_stats(solver),
-                        })
-                        processed = solved + unknown + skipped + prop_unsat
-                        run_elapsed = time.time() - run_start
+    try:
+        with S(bootstrap_with=clauses) as solver:
+            for branch_no, (description, branch_assumptions, details) in enumerate(combined_branch_choices(groups), start=1):
+                if (branch_no - 1) % args.branch_mod != args.branch_index:
+                    continue
+                local_seen += 1
+                if description in completed:
+                    skipped += 1
+                    if skipped <= 5 or skipped % 100 == 0:
+                        elapsed = time.time() - run_start
                         progress.log(
-                            f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
-                            f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
-                            f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
+                            f"branch {branch_no}/{total} local={local_seen}/{selected_total}: skipped from resume; "
+                            f"processed={solved + unknown + skipped + prop_unsat}/{selected_total}, "
+                            f"elapsed={format_seconds(elapsed)} {eta_text(solved + unknown + skipped + prop_unsat, selected_total, elapsed)}"
                         )
-                        continue
-                    if args.propagate_only:
-                        elapsed = time.time() - start
-                        unknown += 1
-                        print(
-                            f"branch {branch_no}/{total}: {description} -> prop-ok "
-                            f"elapsed={elapsed:.2f}s propagated={len(props)}"
-                        )
-                        continue
+                    continue
+                if args.max_branches and solved + unknown + prop_unsat >= args.max_branches:
+                    break
+                if stop_controller.should_stop():
+                    run_elapsed = time.time() - run_start
+                    run_log.append({
+                        "event": "run-finished",
+                        "status": INTERRUPTED,
+                        "reason": stop_controller.reason(),
+                        "elapsed_seconds": run_elapsed,
+                        "solved": solved,
+                        "prop_unsat": prop_unsat,
+                        "unknown": unknown,
+                        "skipped": skipped,
+                    })
+                    print(f"Deep run stopped gracefully after {run_elapsed:.2f}s: {stop_controller.reason()}")
+                    return 130
 
-            sat = solve_with_progress(solver, assumptions, args, progress, f"branch {branch_no}/{total}")
-            elapsed = time.time() - start
-            status = "unknown" if sat is None else "sat" if sat else "unsat"
-            stats = solver_stats(solver)
-            print(
-                f"branch {branch_no}/{total}: {description} -> {status} "
-                f"elapsed={elapsed:.2f}s stats={stats}"
-            )
-            append_jsonl(log_path, {
-                "branch": description,
-                "branch_no": branch_no,
-                "total_branches": total,
-                "details": details,
-                "status": status,
-                "elapsed_seconds": elapsed,
-                "solver": args.solver,
-                "conflict_budget": args.conflicts,
-                "stats": stats,
-            })
+                assumptions = base + branch_assumptions
+                progress.log(
+                    f"branch {branch_no}/{total} local={local_seen}/{selected_total} starts: "
+                    f"{description}; assumptions={len(assumptions)}"
+                )
+                run_log.append({
+                    "event": "branch-start",
+                    "branch": description,
+                    "branch_no": branch_no,
+                    "local_no": local_seen,
+                    "total_branches": total,
+                    "selected_branches": selected_total,
+                    "details": details,
+                    "status": "started",
+                    "assumptions": len(assumptions),
+                    "solver": args.solver,
+                })
 
-            if sat is None:
-                unknown += 1
-            else:
-                solved += 1
-            processed = solved + unknown + skipped + prop_unsat
-            run_elapsed = time.time() - run_start
-            progress.log(
-                f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
-                f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
-                f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
-            )
-            if sat is None or sat is False:
-                continue
+                def branch_heartbeat(record: Dict[str, object]) -> None:
+                    out = {
+                        "branch": description,
+                        "branch_no": branch_no,
+                        "local_no": local_seen,
+                        "total_branches": total,
+                        "selected_branches": selected_total,
+                        "details": details,
+                        "solver": args.solver,
+                    }
+                    out.update(record)
+                    run_log.append(out)
 
-            O = matrix_from_model(cfg, builder, solver.get_model())
-            ok, witness = verify_solution(cfg, O, verbose=True)
-            print_operations(cfg, O)
-            out_path = solution_path_for_branch(args.out, branch_no, total)
-            if out_path:
-                Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-                dump_solution(cfg, O, out_path)
-                print(f"wrote {out_path}")
-            append_jsonl(log_path, {
-                "branch": description,
-                "branch_no": branch_no,
-                "status": "verified-sat" if ok and witness else "bad-model",
-                "witness": list(witness) if witness is not None else None,
-            })
-            return 0 if ok and witness else 2
+                start = time.time()
+                if args.propagate_branches:
+                    prop = solver_propagate(solver, assumptions)
+                    if prop is not None:
+                        ok, props = prop
+                        if not ok:
+                            elapsed = time.time() - start
+                            prop_unsat += 1
+                            print(
+                                f"branch {branch_no}/{total}: {description} -> unsat-prop "
+                                f"elapsed={elapsed:.2f}s propagated={len(props)} stats={solver_stats(solver)}"
+                            )
+                            run_log.append({
+                                "event": "branch-finished",
+                                "branch": description,
+                                "branch_no": branch_no,
+                                "local_no": local_seen,
+                                "total_branches": total,
+                                "selected_branches": selected_total,
+                                "details": details,
+                                "status": "unsat-prop",
+                                "elapsed_seconds": elapsed,
+                                "solver": args.solver,
+                                "stats": solver_stats(solver),
+                            })
+                            processed = solved + unknown + skipped + prop_unsat
+                            run_elapsed = time.time() - run_start
+                            progress.log(
+                                f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
+                                f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
+                                f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
+                            )
+                            continue
+                        if args.propagate_only:
+                            elapsed = time.time() - start
+                            unknown += 1
+                            print(
+                                f"branch {branch_no}/{total}: {description} -> prop-ok "
+                                f"elapsed={elapsed:.2f}s propagated={len(props)}"
+                            )
+                            run_log.append({
+                                "event": "branch-finished",
+                                "branch": description,
+                                "branch_no": branch_no,
+                                "local_no": local_seen,
+                                "total_branches": total,
+                                "selected_branches": selected_total,
+                                "details": details,
+                                "status": "prop-ok",
+                                "elapsed_seconds": elapsed,
+                                "solver": args.solver,
+                                "propagated": len(props),
+                            })
+                            continue
 
+                sat = solve_with_progress(
+                    solver,
+                    assumptions,
+                    args,
+                    progress,
+                    f"branch {branch_no}/{total}",
+                    heartbeat=branch_heartbeat,
+                    should_stop=stop_controller.should_stop,
+                )
+                elapsed = time.time() - start
+                if sat == INTERRUPTED:
+                    stats = solver_stats(solver)
+                    run_log.append({
+                        "event": "branch-finished",
+                        "branch": description,
+                        "branch_no": branch_no,
+                        "local_no": local_seen,
+                        "total_branches": total,
+                        "selected_branches": selected_total,
+                        "details": details,
+                        "status": INTERRUPTED,
+                        "elapsed_seconds": elapsed,
+                        "solver": args.solver,
+                        "stats": stats,
+                        "reason": stop_controller.reason(),
+                    })
+                    run_elapsed = time.time() - run_start
+                    run_log.append({
+                        "event": "run-finished",
+                        "status": INTERRUPTED,
+                        "reason": stop_controller.reason(),
+                        "elapsed_seconds": run_elapsed,
+                        "solved": solved,
+                        "prop_unsat": prop_unsat,
+                        "unknown": unknown,
+                        "skipped": skipped,
+                    })
+                    print(f"Deep run stopped gracefully after {run_elapsed:.2f}s: {stop_controller.reason()}")
+                    return 130
+                status = "unknown" if sat is None else "sat" if sat else "unsat"
+                stats = solver_stats(solver)
+                print(
+                    f"branch {branch_no}/{total}: {description} -> {status} "
+                    f"elapsed={elapsed:.2f}s stats={stats}"
+                )
+                run_log.append({
+                    "event": "branch-finished",
+                    "branch": description,
+                    "branch_no": branch_no,
+                    "local_no": local_seen,
+                    "total_branches": total,
+                    "selected_branches": selected_total,
+                    "details": details,
+                    "status": status,
+                    "elapsed_seconds": elapsed,
+                    "solver": args.solver,
+                    "conflict_budget": args.conflicts,
+                    "stats": stats,
+                })
+
+                if sat is None:
+                    unknown += 1
+                else:
+                    solved += 1
+                processed = solved + unknown + skipped + prop_unsat
+                run_elapsed = time.time() - run_start
+                progress.log(
+                    f"deep progress: processed={processed}/{selected_total}, solved={solved}, "
+                    f"prop_unsat={prop_unsat}, unknown={unknown}, skipped={skipped}, "
+                    f"elapsed={format_seconds(run_elapsed)} {eta_text(processed, selected_total, run_elapsed)}"
+                )
+                if sat is None or sat is False:
+                    continue
+
+                O = matrix_from_model(cfg, builder, solver.get_model())
+                ok, witness = verify_solution(cfg, O, verbose=True)
+                print_operations(cfg, O)
+                out_path = solution_path_for_branch(args.out, branch_no, total)
+                if out_path:
+                    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+                    dump_solution(cfg, O, out_path)
+                    print(f"wrote {out_path}")
+                verified_status = "verified-sat" if ok and witness else "bad-model"
+                if ok and witness and args.touch_stop_file_on_sat and stop_controller.stop_file is not None:
+                    write_stop_file(stop_controller.stop_file, f"verified solution in branch {branch_no}/{total}")
+                    print(f"wrote stop file {stop_controller.stop_file}")
+                run_log.append({
+                    "event": "solution-verified",
+                    "branch": description,
+                    "branch_no": branch_no,
+                    "local_no": local_seen,
+                    "total_branches": total,
+                    "selected_branches": selected_total,
+                    "status": verified_status,
+                    "witness": list(witness) if witness is not None else None,
+                })
+                run_log.append({
+                    "event": "run-finished",
+                    "status": verified_status,
+                    "elapsed_seconds": time.time() - run_start,
+                    "solved": solved,
+                    "prop_unsat": prop_unsat,
+                    "unknown": unknown,
+                    "skipped": skipped,
+                    "solution_path": out_path,
+                })
+                return 0 if ok and witness else 2
+    except KeyboardInterrupt:
+        run_elapsed = time.time() - run_start
+        run_log.append({
+            "event": "run-finished",
+            "status": INTERRUPTED,
+            "reason": "KeyboardInterrupt",
+            "elapsed_seconds": run_elapsed,
+            "solved": solved,
+            "prop_unsat": prop_unsat,
+            "unknown": unknown,
+            "skipped": skipped,
+        })
+        print(f"Deep run interrupted after {run_elapsed:.2f}s.")
+        return 130
+
+    final_status = "unknown" if unknown else "exhausted"
+    run_log.append({
+        "event": "run-finished",
+        "status": final_status,
+        "elapsed_seconds": time.time() - run_start,
+        "solved": solved,
+        "prop_unsat": prop_unsat,
+        "unknown": unknown,
+        "skipped": skipped,
+    })
     print(
         f"Deep run finished in {time.time() - run_start:.2f}s: "
         f"solved={solved} prop_unsat={prop_unsat} unknown={unknown} skipped={skipped}"
@@ -1601,6 +2028,140 @@ def run_stats(cfg: Config, args: argparse.Namespace) -> int:
     return 0 if builder.contradiction is None else 1
 
 
+def expand_log_inputs(inputs: Sequence[str], skip: Optional[Path] = None) -> List[Path]:
+    paths: List[Path] = []
+    seen: set[Path] = set()
+    skip_resolved = skip.resolve() if skip is not None else None
+    for item in inputs:
+        if not item:
+            continue
+        candidates: List[Path]
+        p = Path(item)
+        if p.is_dir():
+            candidates = sorted(p.rglob("*.jsonl"))
+        elif any(ch in item for ch in "*?[]"):
+            candidates = [Path(match) for match in sorted(glob.glob(item, recursive=True))]
+        else:
+            candidates = [p]
+        for candidate in candidates:
+            if not candidate.exists() or not candidate.is_file():
+                continue
+            resolved = candidate.resolve()
+            if skip_resolved is not None and resolved == skip_resolved:
+                continue
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            paths.append(candidate)
+    return paths
+
+
+def branch_record_key(record: Dict[str, object]) -> Optional[Tuple[object, str]]:
+    branch = record.get("branch")
+    if not isinstance(branch, str):
+        return None
+    return record.get("total_branches", "unknown"), branch
+
+
+def log_record_rank(record: Dict[str, object]) -> int:
+    status = record.get("status")
+    if status in TERMINAL_BRANCH_STATUSES:
+        return 4
+    if status == "unknown":
+        return 3
+    if status in {"running", "started", INTERRUPTED, "prop-ok"}:
+        return 2
+    return 1
+
+
+def log_sort_key(record: Dict[str, object]) -> Tuple[int, str]:
+    branch_no = record.get("branch_no")
+    if isinstance(branch_no, int):
+        number = branch_no
+    else:
+        try:
+            number = int(branch_no)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            number = 0
+    return number, str(record.get("branch", ""))
+
+
+def summarize_log_files(paths: Sequence[Path]) -> Tuple[Dict[Tuple[object, str], Dict[str, object]], Dict[str, int], int]:
+    latest: Dict[Tuple[object, str], Dict[str, object]] = {}
+    status_counts: Dict[str, int] = {}
+    record_count = 0
+    sequence = 0
+    sequence_by_key: Dict[Tuple[object, str], int] = {}
+    for path in paths:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                record_count += 1
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                key = branch_record_key(record)
+                if key is None:
+                    continue
+                record = dict(record)
+                record.setdefault("source_log", str(path))
+                old = latest.get(key)
+                if old is None or (log_record_rank(record), sequence) >= (log_record_rank(old), sequence_by_key[key]):
+                    latest[key] = record
+                    sequence_by_key[key] = sequence
+                sequence += 1
+    for record in latest.values():
+        status = str(record.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+    return latest, status_counts, record_count
+
+
+def run_log_summary(args: argparse.Namespace, compact: bool) -> int:
+    inputs = list(args.log_in or [])
+    if args.log:
+        inputs.append(args.log)
+    if not inputs:
+        raise SystemExit("--mode log-summary/log-compact requires --log-in PATH, --log PATH, or both")
+
+    out_path = Path(args.log_out) if args.log_out else Path("run_logs") / "colored_magma" / "compact.jsonl"
+    paths = expand_log_inputs(inputs, skip=out_path if compact else None)
+    if not paths:
+        raise SystemExit("no JSONL log files found")
+
+    latest, status_counts, record_count = summarize_log_files(paths)
+    closed = sum(count for status, count in status_counts.items() if status in TERMINAL_BRANCH_STATUSES)
+    print(f"Log files: {len(paths)}")
+    print(f"Input records: {record_count}")
+    print(f"Latest branch records: {len(latest)}")
+    print(f"Closed branches: {closed}")
+    print(f"Status counts: {dict(sorted(status_counts.items()))}")
+
+    if compact:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        records = sorted(latest.values(), key=log_sort_key)
+        summary = {
+            "event": "compact-summary",
+            "event_time": timestamp_text(),
+            "input_files": [str(path) for path in paths],
+            "input_records": record_count,
+            "latest_branch_records": len(records),
+            "closed_branches": closed,
+            "status_counts": dict(sorted(status_counts.items())),
+        }
+        with out_path.open("w", encoding="utf-8") as f:
+            f.write(json.dumps(summary, sort_keys=True) + "\n")
+            for record in records:
+                f.write(json.dumps(record, sort_keys=True) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        print(f"Wrote compact log: {out_path}")
+    return 0
+
+
 def config_from_name(name: str) -> Config:
     if name == "primary":
         return Config(name="primary", p=19, q=7, A=7, B=4, bad=5, seed_primary=True)
@@ -1656,6 +2217,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--bad-slope", type=int, default=None, help="custom config bad slope; use p for infinity")
     parser.add_argument("--mode", default="full", choices=[
         "full", "deep", "dimacs", "cubes", "affine-o11-projection-sweep", "maps", "stats",
+        "log-summary", "log-compact",
     ])
     parser.add_argument("--solver", default="cadical", choices=["cadical", "glucose", "kissat", "maple", "minisat"])
     parser.add_argument("--out", default="solution.json", help="where to write a found solution JSON; use empty string to disable")
@@ -1669,6 +2231,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--no-lambda6-row-prunes", action="store_true", help="disable derived lambda=6 row-repeat nogoods")
     parser.add_argument("--no-replace-derived-identities", action="store_true",
                         help="keep full q^5 identities even when primary derived constraints cover lambda=1,5,6,12")
+    parser.add_argument("--transformed-identity-prunes", action="store_true",
+                        help="add derived z=(y*z)*((y*(y*z))*y) slope identity clauses")
     parser.add_argument("--symbreak-o11-00", type=int, choices=[0, 1], default=None,
                         help="primary only: assume O_11(0,0)=0 or normalized nonzero value 1")
     parser.add_argument("--restartable-symbreak", action=argparse.BooleanOptionalAction, default=True,
@@ -1696,9 +2260,20 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--max-branches", type=int, default=0, help="deep/cubes mode: stop after this many local branches in the selected shard")
     parser.add_argument("--log", default="", help="deep mode: JSONL progress log path")
     parser.add_argument("--resume", action="store_true", help="deep mode: skip branches already marked complete in the JSONL log")
+    parser.add_argument("--heartbeat-every", type=float, default=600.0,
+                        help="deep mode: seconds between durable JSONL solver heartbeats; use 0 to disable")
+    parser.add_argument("--no-fsync-log", dest="fsync_log", action="store_false", default=True,
+                        help="deep mode: do not fsync JSONL records after each append")
+    parser.add_argument("--stop-file", default="",
+                        help="deep mode: if this file exists, stop gracefully after the current solver chunk")
+    parser.add_argument("--touch-stop-file-on-sat", action="store_true",
+                        help="deep mode: create --stop-file after a verified SAT solution so sibling shards wind down")
     parser.add_argument("--dry-run", action="store_true", help="deep mode: print selected branches without solving")
     parser.add_argument("--cnf-out", default="", help="dimacs mode: path for exported CNF")
     parser.add_argument("--cubes-out-dir", default="", help="cubes mode: directory for base.cnf and cubes.txt")
+    parser.add_argument("--log-in", action="append", default=[],
+                        help="log modes: JSONL file, directory of JSONL files, or glob; may be repeated")
+    parser.add_argument("--log-out", default="", help="log-compact mode: compact merged JSONL output path")
     return parser.parse_args(argv)
 
 
@@ -1710,12 +2285,18 @@ def main(argv: Sequence[str]) -> int:
         raise SystemExit("--progress-conflicts must be nonnegative")
     if args.progress_every < 0:
         raise SystemExit("--progress-every must be nonnegative")
+    if args.heartbeat_every < 0:
+        raise SystemExit("--heartbeat-every must be nonnegative")
     if args.branch_mod < 1:
         raise SystemExit("--branch-mod must be positive")
     if args.branch_index < 0 or args.branch_index >= args.branch_mod:
         raise SystemExit("--branch-index must satisfy 0 <= index < mod")
     if args.out == "":
         args.out = None
+    if args.mode == "log-summary":
+        return run_log_summary(args, compact=False)
+    if args.mode == "log-compact":
+        return run_log_summary(args, compact=True)
     cfg = config_from_args(args)
     if args.mode == "maps":
         show_maps(cfg)
