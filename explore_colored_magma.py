@@ -177,6 +177,17 @@ def parse_row(text: str, cfg: Config) -> Tuple[int, int]:
     return a, i
 
 
+def parse_column(text: str, cfg: Config) -> Tuple[int, int]:
+    parts = text.split(":")
+    if len(parts) != 2:
+        raise ValueError(f"expected COLUMN as slope:col, got {text!r}")
+    a = parse_label(parts[0], cfg.p)
+    j = int(parts[1])
+    if not 0 <= j < cfg.q:
+        raise ValueError(f"column index in {text!r} is outside 0..{cfg.q - 1}")
+    return a, j
+
+
 def cell_desc(cfg: Config, a: int, i: int, j: int, value: int) -> str:
     return f"O_{label_name(a, cfg.p)}[{i},{j}]={value}"
 
@@ -1111,9 +1122,21 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
 
     branch_cells = list(args.branch_cell or [])
     branch_rows = list(args.branch_row or [])
+    branch_columns = list(args.branch_column or [])
     branch_o11_columns = list(args.branch_o11_column or [])
+    has_explicit_branch = bool(branch_cells or branch_rows or branch_columns or branch_o11_columns)
 
-    if not branch_cells and not branch_rows and not branch_o11_columns and args.symbreak_o11_00 is None:
+    if (
+        not has_explicit_branch
+        and args.symbreak_o11_00 is not None
+        and args.restartable_symbreak
+        and cfg.seed_primary
+        and cfg.q == 7
+    ):
+        branch_o11_columns.append("0")
+        has_explicit_branch = True
+
+    if not has_explicit_branch and args.symbreak_o11_00 is None:
         if cfg.seed_primary and cfg.q == 7:
             if args.default_branch == "o11-column":
                 branch_o11_columns.append("0")
@@ -1145,11 +1168,33 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
             raise SystemExit(str(exc)) from exc
         group = []
         for perm in itertools.permutations(range(cfg.q)):
+            if cfg.seed_primary and a == 11 and i == 0 and args.symbreak_o11_00 is not None:
+                if perm[0] != args.symbreak_o11_00:
+                    continue
             choice = row_choice(builder, cfg, a, i, perm)
             if choice is not None:
                 group.append(choice)
         if not group:
             raise SystemExit(f"branch row {spec!r} has no permutations compatible with fixed seed")
+        groups.append(group)
+
+    for spec in branch_columns:
+        try:
+            a, j = parse_column(spec, cfg)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        group = []
+        for perm in itertools.permutations(range(cfg.q)):
+            if cfg.seed_primary and a == 11 and j == 0 and args.symbreak_o11_00 is not None:
+                if perm[0] != args.symbreak_o11_00:
+                    continue
+            if args.primary_o11_symmetry and cfg.seed_primary and a == 11 and j == 0 and perm[0] not in (0, 1):
+                continue
+            choice = column_choice(builder, cfg, a, j, perm)
+            if choice is not None:
+                group.append(choice)
+        if not group:
+            raise SystemExit(f"branch column {spec!r} has no permutations compatible with fixed seed")
         groups.append(group)
 
     for spec in branch_o11_columns:
@@ -1160,6 +1205,8 @@ def branch_choice_groups(cfg: Config, builder: CNFBuilder, args: argparse.Namesp
             raise SystemExit(f"O11 column index {j} is outside 0..{cfg.q - 1}")
         group = []
         for perm in itertools.permutations(range(cfg.q)):
+            if j == 0 and args.symbreak_o11_00 is not None and perm[0] != args.symbreak_o11_00:
+                continue
             if args.primary_o11_symmetry and j == 0 and perm[0] not in (0, 1):
                 continue
             choice = column_choice(builder, cfg, 11, j, perm)
@@ -1624,12 +1671,16 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
                         help="keep full q^5 identities even when primary derived constraints cover lambda=1,5,6,12")
     parser.add_argument("--symbreak-o11-00", type=int, choices=[0, 1], default=None,
                         help="primary only: assume O_11(0,0)=0 or normalized nonzero value 1")
+    parser.add_argument("--restartable-symbreak", action=argparse.BooleanOptionalAction, default=True,
+                        help="with --symbreak-o11-00 and no explicit branch, split O_11 column 0 into resumable cubes")
     parser.add_argument("--assume-cell", action="append", default=[], metavar="L:I:J:V",
                         help="add a unit assumption O_L(i,j)=v; use L=inf for the infinite slope")
     parser.add_argument("--branch-cell", action="append", default=[], metavar="L:I:J[=V,...]",
                         help="deep mode: split over values of a cell, or over listed values only")
     parser.add_argument("--branch-row", action="append", default=[], metavar="L:I",
                         help="deep mode: split over all row permutations for O_L row i")
+    parser.add_argument("--branch-column", action="append", default=[], metavar="L:J",
+                        help="deep/cubes mode: split over all column permutations for O_L column j")
     parser.add_argument("--branch-o11-column", action="append", default=[], metavar="J",
                         help="deep/cubes mode, primary only: split over all permutations of column j of O_11")
     parser.add_argument("--default-branch", default="o11-column", choices=["o11-column", "cell", "none"],
